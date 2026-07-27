@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Grok Build panel (harness)</title>
+    <script type="module">
+      import { applyTheme } from './theme.js';
+      applyTheme(new URLSearchParams(location.search).get('theme') ?? 'dark');
+    </script>
+    <script>
+      /*
+       * Stand-in for the API VS Code injects into a webview. Everything the panel posts is
+       * forwarded to the harness page, which shows it in the message log — that is how we check
+       * a button actually reaches the host.
+       */
+      let panelState = {};
+      window.acquireVsCodeApi = () => ({
+        postMessage(message) {
+          parent.postMessage({ __fromPanel: message }, '*');
+        },
+        getState: () => panelState,
+        setState(next) {
+          panelState = next;
+        },
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="../../dist/webview.js"></script>
+  </body>
+</html>

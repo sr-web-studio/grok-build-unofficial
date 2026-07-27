@@ -1,0 +1,38 @@
+# What stays out of the .vsix. Everything is bundled into dist/ by esbuild, so the vsix only needs
+# dist/, media/, package.json, LICENSE, README, CHANGELOG — no sources, no toolchain, no deps.
+
+# Sources and build inputs (bundled into dist/)
+src/**
+webview/**
+esbuild.mjs
+svelte.config.mjs
+tsconfig*.json
+
+# Dev-only tooling and notes
+tools/**
+docs/**
+.vscode/**
+.github/**
+CLAUDE.md
+AGENTS.md
+# Design source handed over by the design agent — reference material, not a build input
+.design-import/**
+*.zip
+.gitignore
+.gitattributes
+.vscodeignore
+package-lock.json
+yarn.lock
+
+# Raw ACP wire captures: machine paths and prompt content. Must never leave this machine.
+recordings/**
+
+# Local secrets, in case one ever lands here
+.dev.vars
+.env
+
+# Source maps: useful in the dev host, dead weight (and full of local paths) in a shipped vsix
+**/*.map
+
+# Never ship a nested vsix
+*.vsix

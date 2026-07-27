@@ -1,0 +1,225 @@
+{
+  "name": "grok-build-unofficial",
+  "displayName": "Grok Build (unofficial)",
+  "description": "Claude Code-style chat UI for the Grok Build CLI over the Agent Client Protocol. Unofficial — not affiliated with xAI.",
+  "version": "0.1.0",
+  "publisher": "srwebstudio",
+  "license": "MIT",
+  "private": true,
+  "author": {
+    "name": "SR Web Studio",
+    "url": "https://github.com/sr-web-studio"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sr-web-studio/grok-build-unofficial.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sr-web-studio/grok-build-unofficial/issues"
+  },
+  "homepage": "https://github.com/sr-web-studio/grok-build-unofficial#readme",
+  "qna": "https://github.com/sr-web-studio/grok-build-unofficial/issues",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0d1117",
+    "theme": "dark"
+  },
+  "keywords": [
+    "grok",
+    "xai",
+    "acp",
+    "agent",
+    "chat",
+    "ai",
+    "cli",
+    "agent client protocol"
+  ],
+  "engines": {
+    "vscode": "^1.125.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "grokBuild",
+          "title": "Grok Build",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "grokBuild": [
+        {
+          "id": "grokBuild.chat",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "grokBuild.focusChat",
+        "title": "Grok Build: Focus Chat",
+        "category": "Grok Build"
+      },
+      {
+        "command": "grokBuild.newSession",
+        "title": "Grok Build: New Session",
+        "category": "Grok Build",
+        "icon": "$(add)"
+      },
+      {
+        "command": "grokBuild.restartAgent",
+        "title": "Grok Build: Restart Agent Process",
+        "category": "Grok Build"
+      },
+      {
+        "command": "grokBuild.showLog",
+        "title": "Grok Build: Show Protocol Log",
+        "category": "Grok Build"
+      },
+      {
+        "command": "grokBuild.addSelectionToChat",
+        "title": "Grok Build: Add Selection to Chat",
+        "category": "Grok Build"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "grokBuild.newSession",
+          "when": "view == grokBuild.chat",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "grokBuild.addSelectionToChat",
+          "when": "editorHasSelection",
+          "group": "grokBuild@1"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "grokBuild.focusChat",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
+      },
+      {
+        "command": "grokBuild.addSelectionToChat",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "Grok Build (unofficial)",
+      "properties": {
+        "grokBuild.cliPath": {
+          "type": "string",
+          "default": "grok",
+          "description": "Path to the grok executable. Leave as \"grok\" to use PATH."
+        },
+        "grokBuild.permissionMode": {
+          "type": "string",
+          "enum": [
+            "default",
+            "acceptEdits",
+            "plan",
+            "bypassPermissions"
+          ],
+          "default": "default",
+          "enumDescriptions": [
+            "Ask before every file write and terminal command.",
+            "Apply file edits automatically, still ask before terminal commands.",
+            "Read-only research; the agent proposes a plan and touches nothing.",
+            "Never ask. The agent writes files and runs commands unattended."
+          ],
+          "description": "Approval mode enforced by this extension at the fs/terminal callback boundary. Grok's own permission machinery is not used (it does not raise permission requests over ACP)."
+        },
+        "grokBuild.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model id to launch with (e.g. grok-4.5). Empty uses the CLI default."
+        },
+        "grokBuild.reasoningEffort": {
+          "type": "string",
+          "enum": [
+            "",
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "",
+          "description": "Reasoning effort to launch with. Empty uses the CLI default."
+        },
+        "grokBuild.showThinking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Stream the agent's reasoning into the transcript (collapsed by default)."
+        },
+        "grokBuild.autoExpandThinking": {
+          "type": "boolean",
+          "default": false,
+          "description": "Expand thinking blocks as they stream instead of keeping them collapsed."
+        },
+        "grokBuild.readUnsavedBuffers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Serve fs/read_text_file from unsaved editor buffers so the agent sees exactly what you see."
+        },
+        "grokBuild.applyEditsAsWorkspaceEdit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Apply agent writes through the VS Code edit API (native undo, dirty buffers) instead of writing straight to disk."
+        },
+        "grokBuild.useSharedLeader": {
+          "type": "boolean",
+          "default": true,
+          "description": "Attach to grok's shared leader process so sessions stay in sync with the TUI. Disable to spawn a private backend."
+        },
+        "grokBuild.terminalOutputByteLimit": {
+          "type": "number",
+          "default": 65536,
+          "description": "Maximum bytes of command output handed back to the agent per terminal."
+        },
+        "grokBuild.logProtocol": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write every JSON-RPC frame to the Grok Build output channel. Secrets are redacted."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json && svelte-check --tsconfig tsconfig.webview.json --threshold error",
+    "smoke": "npm run build && node tools/vscode-smoke.mjs",
+    "smoke:vsix": "npm run package && node tools/vscode-smoke.mjs --vsix",
+    "package": "npm run typecheck && node esbuild.mjs --production && vsce package --no-dependencies --no-rewrite-relative-links",
+    "publish:marketplace": "vsce publish --no-dependencies --no-rewrite-relative-links",
+    "publish:openvsx": "ovsx publish --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.125.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.28.1",
+    "esbuild-svelte": "^0.9.5",
+    "ovsx": "^0.10.5",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.3",
+    "svelte-preprocess": "^6.0.5",
+    "typescript": "^5.7.0"
+  }
+}

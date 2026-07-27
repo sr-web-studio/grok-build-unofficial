@@ -1,0 +1,19 @@
+node_modules/
+dist/
+out/
+*.vsix
+
+# ACP wire recordings: raw agent traffic, machine-specific paths, never committed
+recordings/
+
+# Design hand-off from the design agent: reference material, kept locally
+.design-import/
+*.zip
+
+.dev.vars
+.env
+*.log
+.DS_Store
+Thumbs.db
+issue.png 
+issue2.png 

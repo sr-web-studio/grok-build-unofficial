@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Activity bar icons are masked to a single colour, so draw in currentColor only. -->
+  <path
+    fill="currentColor"
+    d="M3 4.5A2.5 2.5 0 0 1 5.5 2h13A2.5 2.5 0 0 1 21 4.5v10a2.5 2.5 0 0 1-2.5 2.5H9.9l-4.3 3.7A1 1 0 0 1 4 19.9V17h-.5A2.5 2.5 0 0 1 3 14.5v-10Zm2.5-1A1 1 0 0 0 4.5 4.5v10a1 1 0 0 0 1 1H5.5V17h.06l3.78-3.25a1 1 0 0 1 .65-.25h8.51a1 1 0 0 0 1-1v-10a1 1 0 0 0-1-1h-13Z"
+  />
+  <path
+    fill="currentColor"
+    d="M12 4.6l1.28 2.98L16.4 8.8l-2.6 2.05.4 3.3L12 12.4l-2.2 1.75.4-3.3L7.6 8.8l3.12-1.22L12 4.6Z"
+  />
+</svg>

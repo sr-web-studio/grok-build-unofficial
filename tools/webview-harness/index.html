@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Grok Build webview harness</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, 'Segoe UI', sans-serif;
+        font-size: 13px;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        background: #101010;
+        color: #ddd;
+      }
+      #panel {
+        flex: 0 0 auto;
+        height: 100vh;
+        border: none;
+        border-right: 1px solid #333;
+        background: #181818;
+      }
+      #side {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 0.8em 1em;
+        gap: 0.7em;
+        overflow: hidden;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.1em;
+        font-weight: 600;
+      }
+      .hint {
+        color: #888;
+        font-size: 0.9em;
+      }
+      .group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35em;
+        align-items: center;
+      }
+      button,
+      select {
+        font: inherit;
+        background: #262626;
+        color: #ddd;
+        border: 1px solid #3a3a3a;
+        border-radius: 4px;
+        padding: 0.25em 0.6em;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #333;
+      }
+      button.active {
+        background: #0078d4;
+        border-color: #0078d4;
+        color: #fff;
+      }
+      #log {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        background: #161616;
+        border: 1px solid #2c2c2c;
+        border-radius: 5px;
+        padding: 0.5em;
+        font-family: Consolas, monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .entry {
+        padding: 0.15em 0;
+        border-bottom: 1px solid #222;
+      }
+      .entry .t {
+        color: #6a6a6a;
+        margin-right: 0.5em;
+      }
+      .entry .k {
+        color: #4ec9b0;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe id="panel" src="panel.html?theme=dark" width="380"></iframe>
+
+    <div id="side">
+      <h1>Grok Build — webview harness</h1>
+      <div class="hint">
+        The real <code>dist/webview.js</code> with a stubbed VS Code API. Buttons below push the
+        same <code>HostMessage</code>s <code>src/host/session.ts</code> emits; everything the
+        panel posts back lands in the log.
+      </div>
+
+      <div class="group" id="scenarios"></div>
+
+      <div class="group">
+        <select id="theme">
+          <option value="dark">Dark Modern</option>
+          <option value="light">Light Modern</option>
+        </select>
+        <select id="width">
+          <option value="300">300px (narrow sidebar)</option>
+          <option value="380" selected>380px (default sidebar)</option>
+          <option value="520">520px (wide)</option>
+          <option value="760">760px (editor pane)</option>
+        </select>
+        <button id="insert">insertText</button>
+        <button id="focus">focusInput</button>
+        <button id="clear">clear transcript</button>
+        <button id="clearlog">clear log</button>
+      </div>
+
+      <div id="log"></div>
+    </div>
+
+    <script type="module">
+      import { scenarios, baseStatus } from './fixtures.js';
+
+      const frame = document.getElementById('panel');
+      const log = document.getElementById('log');
+      let current = scenarios[0];
+      let run = 0;
+
+      const post = (message) => frame.contentWindow.postMessage(message, '*');
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      function start(scenario) {
+        current = scenario;
+        const token = ++run;
+        for (const b of document.querySelectorAll('#scenarios button')) {
+          b.classList.toggle('active', b.dataset.id === scenario.id);
+        }
+        append('run', { scenario: scenario.id });
+        void scenario.run({ post, sleep, cancelled: () => token !== run });
+      }
+
+      for (const scenario of scenarios) {
+        const button = document.createElement('button');
+        button.textContent = scenario.label;
+        button.dataset.id = scenario.id;
+        button.onclick = () => start(scenario);
+        document.getElementById('scenarios').append(button);
+      }
+
+      function append(kind, payload) {
+        const el = document.createElement('div');
+        el.className = 'entry';
+        el.innerHTML = `<span class="t">${new Date().toLocaleTimeString()}</span><span class="k">${kind}</span> `;
+        el.append(JSON.stringify(payload));
+        log.prepend(el);
+      }
+
+      window.addEventListener('message', (event) => {
+        const message = event.data?.__fromPanel;
+        if (!message) return;
+        append(message.type, message);
+        // The panel announces `ready` on load and on reload; replay whatever is selected.
+        if (message.type === 'ready') start(current);
+      });
+
+      document.getElementById('theme').onchange = (e) => {
+        frame.src = `panel.html?theme=${e.currentTarget.value}`;
+      };
+      document.getElementById('width').onchange = (e) => {
+        frame.width = e.currentTarget.value;
+      };
+      document.getElementById('insert').onclick = () =>
+        post({ type: 'insertText', text: '`src/host/session.ts:412`\n```ts\nawait this.runTurn(text);\n```\n' });
+      document.getElementById('focus').onclick = () => post({ type: 'focusInput' });
+      document.getElementById('clear').onclick = () => post({ type: 'clear' });
+      document.getElementById('clearlog').onclick = () => (log.textContent = '');
+
+      // `harness.*` is what the Chrome DevTools MCP drives during automated checks.
+      window.harness = {
+        post,
+        start: (id) => start(scenarios.find((s) => s.id === id)),
+        status: baseStatus,
+        sent: () => [...log.querySelectorAll('.entry')].map((e) => e.textContent),
+      };
+    </script>
+  </body>
+</html>

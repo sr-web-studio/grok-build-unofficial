@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        // Both of these third-party extensions contribute the same webview view id (`grok.chat`),
+        // so whichever activates second fails in the dev host. Neither is ours; disabling them
+        // here keeps the Extension Development Host clean without touching the main window.
+        "--disable-extension=PawelHuryn.grok-vscode-phuryn",
+        "--disable-extension=sahilrakhaiya.grok-build-gui"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: build"
+    },
+    {
+      "name": "Run Extension (watch)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--disable-extension=PawelHuryn.grok-vscode-phuryn",
+        "--disable-extension=sahilrakhaiya.grok-build-gui"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: watch"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "build",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": [],
+      "label": "npm: build",
+      "detail": "Bundle the extension host and the webview into dist/"
+    },
+    {
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^\\s*(✘|▲)\\s+\\[(ERROR|WARNING)\\]\\s+(.*)$",
+          "severity": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "\\[watch\\] build started",
+          "endsPattern": "\\[watch\\] build finished|watching host \\+ webview"
+        }
+      },
+      "label": "npm: watch",
+      "detail": "Rebuild on save; leave running while the Extension Development Host is open"
+    },
+    {
+      "type": "npm",
+      "script": "typecheck",
+      "problemMatcher": ["$tsc"],
+      "label": "npm: typecheck",
+      "detail": "tsc --noEmit + svelte-check"
+    }
+  ]
+}
