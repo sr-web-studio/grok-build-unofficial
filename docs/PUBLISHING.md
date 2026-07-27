@@ -8,6 +8,12 @@ How SR Web Studio ships **Grok Build (unofficial)** to the public.
 
 - Org: [sr-web-studio](https://github.com/sr-web-studio)
 - Repo: `grok-build-unofficial` (public)
+- To push `.github/workflows/*`, the `gh` / git token needs the **`workflow`** scope:
+
+  ```bash
+  gh auth refresh -h github.com -s repo,workflow,read:org
+  ```
+
 - Secrets for CI (optional but recommended):
   - `VSCE_PAT` — Azure DevOps PAT with **Marketplace → Manage**
   - `OVSX_PAT` — Open VSX personal access token
