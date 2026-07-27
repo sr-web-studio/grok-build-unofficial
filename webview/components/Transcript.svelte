@@ -7,7 +7,6 @@
     TranscriptBlock,
   } from '../../src/shared/protocol';
   import Approval from './Approval.svelte';
-  import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
   import Notice from './Notice.svelte';
   import PlanProposal from './PlanProposal.svelte';
@@ -24,6 +23,9 @@
     revision: number;
     /** When `thinking`, show a live "still working" cue between sparse tool bursts. */
     agentState: AgentState;
+    /** Bound by App so the chat-layer Latest button can sit above Plan / other overlays. */
+    jumpVisible?: boolean;
+    onJumpReady?: (api: { scrollToBottom: () => void }) => void;
     onApprove: (requestId: string, decision: ApprovalDecision) => void;
     onPlanDecision: (requestId: string, approve: boolean, feedback?: string) => void;
     onAnswerQuestion: (requestId: string, response: QuestionResponse) => void;
@@ -39,6 +41,8 @@
     cwd,
     revision,
     agentState,
+    jumpVisible = $bindable(false),
+    onJumpReady,
     onApprove,
     onPlanDecision,
     onAnswerQuestion,
@@ -51,6 +55,15 @@
   let stuck = $state(true);
   /** Wall-clock seconds the current turn has been open (for the working line). */
   let busySeconds = $state(0);
+  /** Last user prompt scrolled out of view — pin a compact bar at the top (Claude Code-style). */
+  let stickyLastUser = $state(false);
+  /** Expanded long user messages by block id. */
+  let expandedUsers = $state<Record<string, boolean>>({});
+  /** Sticky bar's own expand toggle when the last message is long. */
+  let stickyExpanded = $state(false);
+
+  /** Collapse long user text in-chat and in the sticky bar (≈3 lines / 160 chars). */
+  const COLLAPSE_AT = 160;
 
   // Plan cards live above the composer now; skip them (and never-used queued previews) in chat.
   const visible = $derived(
@@ -101,22 +114,76 @@
     return out;
   });
 
+  const lastUserBlock = $derived.by(() => {
+    for (let i = visible.length - 1; i >= 0; i--) {
+      const b = visible[i];
+      if (b.kind === 'text' && b.role === 'user') return b;
+    }
+    return undefined;
+  });
+
   function onScroll() {
     if (!scroller) return;
     const slack = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
     stuck = slack < 48;
+    jumpVisible = !stuck && visible.length > 0;
+
+    // Pin last user prompt once its row leaves the top — overlay only (no layout reflow).
+    const last = lastUserBlock;
+    if (!last) {
+      stickyLastUser = false;
+      return;
+    }
+    const el = scroller.querySelector(`[data-user-id="${CSS.escape(last.id)}"]`) as HTMLElement | null;
+    if (!el) {
+      stickyLastUser = false;
+      return;
+    }
+    const sRect = scroller.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    stickyLastUser = eRect.bottom < sRect.top + 4;
   }
 
   function scrollToBottom() {
     if (!scroller) return;
     scroller.scrollTop = scroller.scrollHeight;
     stuck = true;
+    stickyLastUser = false;
+    jumpVisible = false;
+  }
+
+  $effect(() => {
+    onJumpReady?.({ scrollToBottom });
+  });
+
+  function scrollToLastUser() {
+    if (!scroller || !lastUserBlock) return;
+    const el = scroller.querySelector(
+      `[data-user-id="${CSS.escape(lastUserBlock.id)}"]`,
+    ) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   $effect(() => {
     revision;
     if (stuck && scroller) scroller.scrollTop = scroller.scrollHeight;
+    // Re-evaluate sticky after stream updates move layout.
+    queueMicrotask(() => onScroll());
   });
+
+  function isLong(text: string): boolean {
+    return text.length > COLLAPSE_AT || text.split('\n').length > 3;
+  }
+
+  function previewText(text: string): string {
+    const flat = text.replace(/\s+/g, ' ').trim();
+    if (flat.length <= COLLAPSE_AT) return text;
+    return `${flat.slice(0, COLLAPSE_AT - 1)}…`;
+  }
+
+  function toggleExpand(id: string) {
+    expandedUsers = { ...expandedUsers, [id]: !expandedUsers[id] };
+  }
 
   const busy = $derived(agentState === 'thinking');
 
@@ -166,6 +233,34 @@
 </script>
 
 <div class="wrap">
+  <!-- Overlay (absolute): must not take flex space or the scroller jumps when it appears. -->
+  {#if stickyLastUser && lastUserBlock}
+    <div class="sticky-user" class:was-queued={lastUserBlock.wasQueued}>
+      <button class="sticky-main" type="button" title="Jump to this message" onclick={scrollToLastUser}>
+        <span class="role gb-kicker">You</span>
+        {#if lastUserBlock.wasQueued}
+          <span class="queue-pill">queued</span>
+        {/if}
+        <span class="sticky-text">
+          {#if isLong(lastUserBlock.text) && !stickyExpanded}
+            {previewText(lastUserBlock.text)}
+          {:else}
+            {lastUserBlock.text}
+          {/if}
+        </span>
+      </button>
+      {#if isLong(lastUserBlock.text)}
+        <button
+          class="sticky-expand"
+          type="button"
+          onclick={() => (stickyExpanded = !stickyExpanded)}
+        >
+          {stickyExpanded ? 'Less' : 'More'}
+        </button>
+      {/if}
+    </div>
+  {/if}
+
   <div class="scroller" bind:this={scroller} onscroll={onScroll}>
     {#if visible.length === 0}
       <div class="empty">
@@ -196,6 +291,7 @@
           prev.block.kind === 'text' &&
           prev.block.role === 'user'
         }
+        data-user-id={row.kind === 'single' && block.kind === 'text' && block.role === 'user' ? block.id : undefined}
       >
         {#if row.kind === 'grok'}
           <div class="bubble assistant" class:gb-caret={row.text.streaming}>
@@ -213,11 +309,22 @@
           </div>
         {:else if block.kind === 'text'}
           {#if block.role === 'user'}
-            <div class="bubble user" class:was-queued={block.wasQueued}>
+            {@const long = isLong(block.text)}
+            {@const open = expandedUsers[block.id] ?? false}
+            <div class="bubble user" class:was-queued={block.wasQueued} class:collapsed={long && !open}>
               <div class="role-row">
                 <div class="role gb-kicker">You</div>
                 {#if block.wasQueued}
                   <span class="queue-pill" title="This was sent from the queue">queued</span>
+                {/if}
+                {#if long}
+                  <button
+                    class="expand"
+                    type="button"
+                    onclick={() => toggleExpand(block.id)}
+                  >
+                    {open ? 'Collapse' : 'Expand'}
+                  </button>
                 {/if}
               </div>
               {#if block.images?.length}
@@ -228,7 +335,7 @@
                 </div>
               {/if}
               {#if block.text}
-                <div class="body">{block.text}</div>
+                <div class="body">{open || !long ? block.text : previewText(block.text)}</div>
               {/if}
             </div>
           {:else}
@@ -274,13 +381,6 @@
       </div>
     {/if}
   </div>
-
-  {#if !stuck && visible.length > 0}
-    <button class="jump" type="button" title="Jump to latest" aria-label="Jump to latest" onclick={scrollToBottom}>
-      <Icon name="arrowDown" size={14} />
-      <span>Latest</span>
-    </button>
-  {/if}
 </div>
 
 <style>
@@ -396,29 +496,87 @@
     color: var(--gb-dim);
   }
 
-  .jump {
+  /*
+   * Absolute overlay on the scroller — never flex-sized. Inserting a flex sibling was
+   * shrinking the scrollport and causing a visible jump when sticky engaged.
+   */
+  .sticky-user {
     position: absolute;
-    right: 14px;
-    bottom: 12px;
-    z-index: 2;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
     display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 10px;
-    border: 1px solid var(--gb-rule-strong, var(--gb-rule));
-    border-radius: 999px;
-    background: var(--vscode-button-secondaryBackground, var(--gb-surface));
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--gb-rule);
+    background: color-mix(
+      in srgb,
+      var(--gb-accent) 14%,
+      var(--vscode-sideBar-background, var(--vscode-editor-background))
+    );
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    pointer-events: auto;
+  }
+
+  .sticky-user.was-queued {
+    border-bottom-color: color-mix(in srgb, var(--gb-warn) 50%, var(--gb-rule));
+  }
+
+  .sticky-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
     font: inherit;
-    font-size: 11px;
-    font-weight: 700;
-    box-shadow: var(--gb-shadow);
+    text-align: left;
     cursor: pointer;
   }
 
-  .jump:hover {
-    border-color: var(--gb-accent);
+  .sticky-text {
+    flex: 1 1 8em;
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.92em;
+    max-height: 4.5em;
+    overflow: hidden;
+  }
+
+  .sticky-expand,
+  .expand {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 1px 7px;
+    border: 1px solid var(--gb-rule);
+    background: color-mix(in srgb, var(--vscode-editor-background) 70%, transparent);
     color: var(--gb-accent);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .sticky-expand:hover,
+  .expand:hover {
+    border-color: var(--gb-accent);
+  }
+
+  .user.collapsed .body {
+    max-height: 4.6em;
+    overflow: hidden;
+  }
+
+  .role-row .expand {
+    margin-left: auto;
   }
 
   .row {

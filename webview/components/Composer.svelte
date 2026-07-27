@@ -40,6 +40,8 @@
     onRestart,
   }: Props = $props();
 
+  /** Two lines at rest (13px × 1.5 line-height × 2). */
+  const MIN_HEIGHT = 39;
   const MAX_HEIGHT = 220;
   const MAX_IMAGES = 6;
 
@@ -112,9 +114,15 @@
 
   function autogrow(el: HTMLTextAreaElement) {
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+    const next = Math.max(MIN_HEIGHT, Math.min(el.scrollHeight, MAX_HEIGHT));
+    el.style.height = `${next}px`;
     el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
   }
+
+  $effect(() => {
+    // Keep the two-line default after mount and after clearing the draft.
+    if (input) autogrow(input);
+  });
 
   function accept(name: string) {
     text = `/${name} `;
@@ -131,8 +139,7 @@
     text = '';
     attachments = [];
     if (input) {
-      input.style.height = 'auto';
-      input.style.overflowY = 'hidden';
+      autogrow(input);
       input.focus();
     }
   }
@@ -261,49 +268,70 @@
     </div>
   {/if}
 
-  <!-- Text only — actions live on the toolbar below so model/effort sit next to Send. -->
   <div class="box">
     {#if attachments.length > 0}
+      {@const maxShow = 4}
+      {@const shown = attachments.slice(0, maxShow)}
+      {@const extra = attachments.length - shown.length}
       <div class="thumbs">
-        {#each attachments as img (img.id)}
+        {#each shown as img (img.id)}
           <div class="thumb">
             <img src={thumb(img)} alt={img.name ?? 'attachment'} />
             <button class="rm" type="button" title="Remove" aria-label="Remove attachment" onclick={() => removeAttachment(img.id)}>
-              <Icon name="close" size={11} />
+              <Icon name="close" size={10} />
             </button>
           </div>
         {/each}
+        {#if extra > 0}
+          <button
+            class="thumb more"
+            type="button"
+            title="{extra} more — click to remove the oldest hidden one"
+            onclick={() => {
+              // Drop the first hidden attachment so the user can clear overflow without a full clear.
+              const hidden = attachments[maxShow];
+              if (hidden) removeAttachment(hidden.id);
+            }}
+          >
+            +{extra}
+          </button>
+        {/if}
       </div>
     {/if}
     <textarea
       bind:this={input}
       bind:value={text}
-      rows="1"
+      rows="2"
       placeholder={busy ? 'Queue a follow-up…' : 'Ask, paste a screenshot, or / for commands…'}
       onkeydown={onKeydown}
       onpaste={onPaste}
       oninput={(e) => autogrow(e.currentTarget)}
     ></textarea>
-    <div class="attach-row">
-      <input
-        bind:this={fileInput}
-        type="file"
-        accept="image/*"
-        multiple
-        class="file"
-        onchange={(e) => {
-          const files = e.currentTarget.files;
-          if (files?.length) void addFiles(files);
-          e.currentTarget.value = '';
-        }}
-      />
-      <button class="icon-btn" type="button" title="Attach image" aria-label="Attach image" onclick={() => fileInput?.click()}>
-        <Icon name="image" size={15} />
-      </button>
-    </div>
   </div>
 
   <div class="toolbar" class:warn={mode.tone === 'warn'} class:danger={mode.tone === 'danger'}>
+    <input
+      bind:this={fileInput}
+      type="file"
+      accept="image/*"
+      multiple
+      class="file"
+      onchange={(e) => {
+        const files = e.currentTarget.files;
+        if (files?.length) void addFiles(files);
+        e.currentTarget.value = '';
+      }}
+    />
+    <button
+      class="icon-btn"
+      type="button"
+      title="Attach image"
+      aria-label="Attach image"
+      onclick={() => fileInput?.click()}
+    >
+      <Icon name="image" size={14} />
+    </button>
+
     <select
       class="mode {mode.tone}"
       title={mode.hint}
@@ -486,7 +514,7 @@
     gap: 6px;
     border: 1px solid var(--vscode-input-border, var(--gb-rule));
     background: var(--vscode-input-background);
-    padding: 7px 8px 4px;
+    padding: 7px 8px;
   }
 
   .box:focus-within {
@@ -496,16 +524,18 @@
   .thumbs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
+    align-items: center;
   }
 
   .thumb {
     position: relative;
-    width: 52px;
-    height: 52px;
+    width: 32px;
+    height: 32px;
     border: 1px solid var(--gb-rule);
     overflow: hidden;
     background: var(--gb-surface-sunken);
+    flex: 0 0 auto;
   }
 
   .thumb img {
@@ -515,22 +545,43 @@
     display: block;
   }
 
+  .thumb.more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--gb-rule);
+    background: color-mix(in srgb, var(--gb-accent) 10%, var(--gb-surface-sunken));
+    color: var(--gb-dim);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .thumb.more:hover {
+    color: var(--vscode-foreground);
+    border-color: var(--gb-accent);
+  }
+
   .rm {
     position: absolute;
-    top: 2px;
-    right: 2px;
+    top: 0;
+    right: 0;
     display: flex;
-    padding: 1px;
+    padding: 0;
     border: none;
-    background: color-mix(in srgb, var(--vscode-editor-background) 80%, transparent);
+    background: color-mix(in srgb, var(--vscode-editor-background) 85%, transparent);
     color: var(--vscode-foreground);
     cursor: pointer;
+    line-height: 1;
   }
 
   textarea {
     width: 100%;
     box-sizing: border-box;
-    min-height: 1.5em;
+    min-height: 39px; /* 2 × 13px × 1.5 */
+    height: 39px;
     resize: none;
     overflow-y: hidden;
     max-height: 220px;
@@ -547,28 +598,28 @@
     outline: none;
   }
 
-  .attach-row {
-    display: flex;
-    justify-content: flex-start;
-  }
-
   .file {
     display: none;
   }
 
+  /* First control on the picker row — same height as the selects. */
   .icon-btn {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2px 5px;
-    border: none;
-    background: none;
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--vscode-dropdown-border, var(--gb-rule));
+    background: var(--vscode-dropdown-background);
     color: var(--gb-dim);
     cursor: pointer;
   }
 
   .icon-btn:hover {
     color: var(--vscode-foreground);
+    border-color: var(--vscode-focusBorder, var(--gb-accent));
   }
 
   /* Permission + model + effort + Send on one row under the text box. */

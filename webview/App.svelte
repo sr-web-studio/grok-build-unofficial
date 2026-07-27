@@ -78,6 +78,10 @@
   let draft = $state(loadDraft());
   let focusSignal = $state(0);
 
+  /** Latest jump lives on the .chat layer so it paints above Plan / other bottom overlays. */
+  let jumpVisible = $state(false);
+  let scrollTranscriptToBottom = $state<() => void>(() => undefined);
+
   const busy = $derived(status.agentState === 'thinking' || status.agentState === 'awaitingApproval');
   const noGit = $derived(status.isGitRepo === false);
 
@@ -480,27 +484,48 @@
     {/if}
   </div>
 
-  <Transcript
-    {blocks}
-    {showThinking}
-    {autoExpandThinking}
-    cwd={status.cwd}
-    {revision}
-    agentState={status.agentState}
-    onApprove={(requestId, decision: ApprovalDecision) =>
-      send({ type: 'approve', requestId, decision })}
-    onPlanDecision={(requestId, approve, feedback) =>
-      send({ type: 'planDecision', requestId, approve, feedback })}
-    onAnswerQuestion={(requestId, response: QuestionResponse) =>
-      send({ type: 'answerQuestion', requestId, response })}
-    onOpenPath={(path, line) => send({ type: 'openPath', path, line })}
-    onOpenDiff={(blockId) => send({ type: 'openDiff', blockId })}
-    onShowLog={() => send({ type: 'showLog' })}
-  />
-
-  {#if status.planEntries?.length}
-    <PlanDock entries={status.planEntries} />
-  {/if}
+  <!--
+    Transcript + floating plan. Latest is a sibling after Plan so it always wins the stack
+    and sits in the bottom-right corner of whatever is currently at the bottom of the chat.
+  -->
+  <div class="chat">
+    <Transcript
+      {blocks}
+      {showThinking}
+      {autoExpandThinking}
+      cwd={status.cwd}
+      {revision}
+      agentState={status.agentState}
+      bind:jumpVisible
+      onJumpReady={(api) => {
+        scrollTranscriptToBottom = api.scrollToBottom;
+      }}
+      onApprove={(requestId, decision: ApprovalDecision) =>
+        send({ type: 'approve', requestId, decision })}
+      onPlanDecision={(requestId, approve, feedback) =>
+        send({ type: 'planDecision', requestId, approve, feedback })}
+      onAnswerQuestion={(requestId, response: QuestionResponse) =>
+        send({ type: 'answerQuestion', requestId, response })}
+      onOpenPath={(path, line) => send({ type: 'openPath', path, line })}
+      onOpenDiff={(blockId) => send({ type: 'openDiff', blockId })}
+      onShowLog={() => send({ type: 'showLog' })}
+    />
+    {#if status.planEntries?.length}
+      <PlanDock entries={status.planEntries} />
+    {/if}
+    {#if jumpVisible}
+      <button
+        class="chat-jump"
+        type="button"
+        title="Jump to latest"
+        aria-label="Jump to latest"
+        onclick={() => scrollTranscriptToBottom()}
+      >
+        <Icon name="arrowDown" size={14} />
+        <span>Latest</span>
+      </button>
+    {/if}
+  </div>
 
   <Composer
     bind:text={draft}
@@ -697,6 +722,44 @@
     flex-direction: column;
     height: 100vh;
     min-height: 0;
+  }
+
+  /* Holds the transcript + floating plan overlay + Latest (top of the local stack). */
+  .chat {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-jump {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border: 1px solid color-mix(in srgb, var(--gb-accent) 40%, var(--gb-rule));
+    border-radius: 999px;
+    background: color-mix(
+      in srgb,
+      var(--vscode-button-background, var(--gb-accent)) 94%,
+      var(--vscode-editor-background)
+    );
+    color: var(--vscode-button-foreground, var(--vscode-foreground));
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: var(--gb-shadow);
+    cursor: pointer;
+  }
+
+  .chat-jump:hover {
+    border-color: var(--gb-accent);
+    filter: brightness(1.08);
   }
 
   /*
