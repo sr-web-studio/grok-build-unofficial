@@ -227,20 +227,32 @@
     color: var(--gb-danger);
   }
 
+  .status.running {
+    color: var(--gb-accent);
+  }
+
+  /*
+   * Spinner is intentionally a bit louder than the rest of the chrome — write/search calls can
+   * finish in a blink, so the in-flight state needs to be obvious while it lasts.
+   */
   .spinner {
     display: inline-block;
-    width: 11px;
-    height: 11px;
-    border: 1.5px solid var(--gb-accent);
-    border-top-color: transparent;
+    width: 12px;
+    height: 12px;
+    border: 2px solid color-mix(in srgb, var(--gb-accent) 35%, transparent);
+    border-top-color: var(--gb-accent);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.65s linear infinite;
   }
 
   @keyframes spin {
     to {
       transform: rotate(360deg);
     }
+  }
+
+  .tool:has(.status.running) {
+    border-color: color-mix(in srgb, var(--gb-accent) 45%, var(--gb-rule));
   }
 
   .label {

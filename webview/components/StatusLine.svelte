@@ -11,9 +11,11 @@
     stopped: 'stopped',
     starting: 'starting…',
     idle: 'ready',
-    thinking: 'working…',
+    thinking: 'working',
     awaitingApproval: 'waiting for you',
   };
+
+  const busy = $derived(status.agentState === 'thinking');
 
   const folder = $derived(status.cwd ? (status.cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? '') : '');
 
@@ -34,9 +36,11 @@
   }
 </script>
 
-<div class="status">
+<div class="status" class:busy>
   <span class="state {status.agentState}">●</span>
-  <span class="label">{stateLabel[status.agentState]}</span>
+  <span class="label">
+    {stateLabel[status.agentState]}{#if busy}<span class="ellipsis" aria-hidden="true"></span>{/if}
+  </span>
 
   {#if status.sessionTitle}
     <span class="sep">·</span>
@@ -108,6 +112,33 @@
   .state.thinking {
     color: var(--gb-accent);
     animation: pulse 1.4s ease-in-out infinite;
+  }
+
+  .status.busy .label {
+    color: var(--gb-accent);
+    font-weight: 700;
+  }
+
+  /* Animated "…" so the top bar also reads as live during quiet model pauses. */
+  .ellipsis::after {
+    content: '';
+    animation: ellipsis-steps 1.2s steps(4, end) infinite;
+  }
+
+  @keyframes ellipsis-steps {
+    0% {
+      content: '';
+    }
+    25% {
+      content: '.';
+    }
+    50% {
+      content: '..';
+    }
+    75%,
+    100% {
+      content: '...';
+    }
   }
 
   .state.awaitingApproval {

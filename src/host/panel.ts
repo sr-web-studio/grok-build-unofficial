@@ -92,11 +92,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         return
       }
       case 'prompt':
-        return this.session.prompt(msg.text)
+        return this.session.prompt(msg.text, msg.images)
       case 'interject':
-        return this.session.interject(msg.text)
+        return this.session.interject(msg.text, msg.images)
       case 'clearQueue':
         return this.session.clearQueue()
+      case 'pushQueue':
+        return this.session.pushQueue(msg.blockId)
       case 'cancel':
         return this.session.cancel()
       case 'approve':

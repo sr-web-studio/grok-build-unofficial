@@ -59,13 +59,38 @@ export interface TranscriptBlockBase {
   promptIndex?: number
 }
 
+/** Image the user attached/pasted. Host may save to disk and set `path`. */
+export interface PromptImage {
+  id: string
+  mimeType: string
+  /** Raw base64 (no data: prefix). Kept for UI thumbnails in the webview. */
+  data: string
+  name?: string
+  /** Absolute path once the host wrote the file into the workspace. */
+  path?: string
+}
+
 export interface TextBlock extends TranscriptBlockBase {
   kind: 'text'
   role: 'user' | 'assistant'
   text: string
   streaming: boolean
-  /** User text typed during a turn: held locally and sent once the turn ends. */
+  /**
+   * True while a message is waiting in the composer queue (should not appear in the transcript).
+   * Kept for back-compat; the live queue is `UiStatus.queuedMessages`.
+   */
   queued?: boolean
+  /** Sent after sitting in the queue (or force-pushed) — shown as a badge in the transcript. */
+  wasQueued?: boolean
+  /** Screenshots / pasted images on this user message. */
+  images?: PromptImage[]
+}
+
+/** A follow-up waiting in the composer until the current turn ends (or Send now). */
+export interface QueuedMessage {
+  id: string
+  text: string
+  images?: PromptImage[]
 }
 
 export interface ThinkingBlock extends TranscriptBlockBase {
@@ -246,6 +271,13 @@ export interface UiStatus {
   contextTokens?: number
   lastTurnTotalTokens?: number
   queuedCount: number
+  /** Live queue shown above the composer — not in the transcript until sent. */
+  queuedMessages: QueuedMessage[]
+  /**
+   * Active todo/plan checklist for the session (from ACP `plan` updates). Rendered above the
+   * composer, not as a transcript card.
+   */
+  planEntries?: PlanEntry[]
   error?: string
 }
 
@@ -314,9 +346,14 @@ export type HostMessage =
 
 export type WebviewMessage =
   | { type: 'ready' }
-  | { type: 'prompt'; text: string }
-  | { type: 'interject'; text: string }
+  | { type: 'prompt'; text: string; images?: PromptImage[] }
+  | { type: 'interject'; text: string; images?: PromptImage[] }
   | { type: 'clearQueue' }
+  /**
+   * Force the queue into Grok now. Stops the current turn (if any), then sends either every
+   * waiting message or the one identified by `blockId` first (others stay queued).
+   */
+  | { type: 'pushQueue'; blockId?: string }
   | { type: 'cancel' }
   | { type: 'approve'; requestId: string; decision: ApprovalDecision }
   | {

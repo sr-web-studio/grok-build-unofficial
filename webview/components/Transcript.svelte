@@ -1,12 +1,18 @@
 <script lang="ts">
-  import type { ApprovalDecision, QuestionResponse, TranscriptBlock } from '../../src/shared/protocol';
+  import type {
+    AgentState,
+    ApprovalDecision,
+    PromptImage,
+    QuestionResponse,
+    TranscriptBlock,
+  } from '../../src/shared/protocol';
   import Approval from './Approval.svelte';
+  import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
   import Notice from './Notice.svelte';
   import PlanProposal from './PlanProposal.svelte';
   import Question from './Question.svelte';
   import Thinking from './Thinking.svelte';
-  import TodoList from './TodoList.svelte';
   import ToolCard from './ToolCard.svelte';
   import TurnFooter from './TurnFooter.svelte';
 
@@ -15,8 +21,9 @@
     showThinking: boolean;
     autoExpandThinking: boolean;
     cwd?: string;
-    /** Bumped by App on every host message, including text appends that do not change length. */
     revision: number;
+    /** When `thinking`, show a live "still working" cue between sparse tool bursts. */
+    agentState: AgentState;
     onApprove: (requestId: string, decision: ApprovalDecision) => void;
     onPlanDecision: (requestId: string, approve: boolean, feedback?: string) => void;
     onAnswerQuestion: (requestId: string, response: QuestionResponse) => void;
@@ -31,6 +38,7 @@
     autoExpandThinking,
     cwd,
     revision,
+    agentState,
     onApprove,
     onPlanDecision,
     onAnswerQuestion,
@@ -40,74 +48,250 @@
   }: Props = $props();
 
   let scroller = $state<HTMLDivElement | null>(null);
-  /** Sticky-bottom: follow the stream until the user scrolls up, then leave them alone. */
   let stuck = $state(true);
+  /** Wall-clock seconds the current turn has been open (for the working line). */
+  let busySeconds = $state(0);
 
-  const visible = $derived(blocks.filter((b) => b.kind !== 'thinking' || showThinking));
+  // Plan cards live above the composer now; skip them (and never-used queued previews) in chat.
+  const visible = $derived(
+    blocks.filter((b) => {
+      if (b.kind === 'plan') return false;
+      if (b.kind === 'thinking' && !showThinking) return false;
+      if (b.kind === 'text' && b.queued) return false;
+      return true;
+    }),
+  );
+
+  /**
+   * Group leading thought blocks with the following assistant message so the "Grok" label sits
+   * above thinking (ACP still streams thought first; this is display order only).
+   */
+  type Row =
+    | { kind: 'grok'; thoughts: Extract<TranscriptBlock, { kind: 'thinking' }>[]; text: Extract<TranscriptBlock, { kind: 'text' }> }
+    | { kind: 'single'; block: TranscriptBlock };
+
+  const rows = $derived.by((): Row[] => {
+    const out: Row[] = [];
+    let i = 0;
+    const list = visible;
+    while (i < list.length) {
+      const b = list[i];
+      if (b.kind === 'thinking') {
+        const thoughts: Extract<TranscriptBlock, { kind: 'thinking' }>[] = [];
+        while (i < list.length && list[i].kind === 'thinking') {
+          thoughts.push(list[i] as Extract<TranscriptBlock, { kind: 'thinking' }>);
+          i += 1;
+        }
+        const next = list[i];
+        if (next && next.kind === 'text' && next.role === 'assistant') {
+          out.push({
+            kind: 'grok',
+            thoughts,
+            text: next,
+          });
+          i += 1;
+        } else {
+          for (const t of thoughts) out.push({ kind: 'single', block: t });
+        }
+        continue;
+      }
+      out.push({ kind: 'single', block: b });
+      i += 1;
+    }
+    return out;
+  });
 
   function onScroll() {
     if (!scroller) return;
     const slack = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-    stuck = slack < 32;
+    stuck = slack < 48;
+  }
+
+  function scrollToBottom() {
+    if (!scroller) return;
+    scroller.scrollTop = scroller.scrollHeight;
+    stuck = true;
   }
 
   $effect(() => {
-    // Touch `revision` so streaming appends re-run this too.
     revision;
     if (stuck && scroller) scroller.scrollTop = scroller.scrollHeight;
   });
+
+  const busy = $derived(agentState === 'thinking');
+
+  /** What the sparse gap is most likely doing, based on the last open block. */
+  const workingHint = $derived.by(() => {
+    if (!busy) return '';
+    const last = [...blocks].reverse().find((b) => {
+      if (b.kind === 'thinking' && b.streaming) return true;
+      if (b.kind === 'text' && b.role === 'assistant' && b.streaming) return true;
+      if (b.kind === 'tool' && (b.status === 'pending' || b.status === 'in_progress' || b.waiting))
+        return true;
+      return false;
+    });
+    if (last?.kind === 'thinking' && last.streaming) return 'Thinking';
+    if (last?.kind === 'text' && last.streaming) return 'Writing';
+    if (last?.kind === 'tool') {
+      if (last.waiting) return 'Waiting for approval';
+      return last.label ? `Running ${last.label}` : 'Running a tool';
+    }
+    // Quiet stretch between model steps — the pause the user noticed.
+    return 'Working';
+  });
+
+  $effect(() => {
+    if (!busy) {
+      busySeconds = 0;
+      return;
+    }
+    busySeconds = 0;
+    const started = Date.now();
+    const id = setInterval(() => {
+      busySeconds = Math.floor((Date.now() - started) / 1000);
+    }, 1000);
+    return () => clearInterval(id);
+  });
+
+  function thumb(img: PromptImage): string {
+    return `data:${img.mimeType};base64,${img.data}`;
+  }
+
+  function formatBusy(s: number): string {
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}m ${r.toString().padStart(2, '0')}s`;
+  }
 </script>
 
-<div class="scroller" bind:this={scroller} onscroll={onScroll}>
-  {#if visible.length === 0}
-    <div class="empty">
-      <p>Ask Grok to do something in this workspace.</p>
-      <p class="dim">
-        Writes and commands wait for your approval. <kbd>Enter</kbd> sends,
-        <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line, <kbd>Esc</kbd> stops the turn.
-      </p>
-    </div>
-  {/if}
+<div class="wrap">
+  <div class="scroller" bind:this={scroller} onscroll={onScroll}>
+    {#if visible.length === 0}
+      <div class="empty">
+        <p>Ask Grok to do something in this workspace.</p>
+        <p class="dim">
+          Writes and commands wait for your approval. <kbd>Enter</kbd> sends,
+          <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line, paste a screenshot, <kbd>Esc</kbd> stops the turn.
+        </p>
+      </div>
+    {/if}
 
-  {#each visible as block, i (block.id)}
-    {@const stacked = block.kind === 'tool' && visible[i - 1]?.kind === 'tool'}
-    <div class="row" class:tucked={stacked} class:msg-user={block.kind === 'text' && block.role === 'user'} class:msg-assistant={block.kind === 'text' && block.role === 'assistant'}>
-      {#if block.kind === 'text'}
-        {#if block.role === 'user'}
-          <div class="bubble user" class:queued={block.queued}>
-            <div class="role gb-kicker">You</div>
-            <div class="body">{block.text}{#if block.queued}<span class="tag gb-tag">queued</span>{/if}</div>
-          </div>
-        {:else}
-          <div class="bubble assistant" class:gb-caret={block.streaming}>
+    {#each rows as row, i (row.kind === 'grok' ? row.text.id : row.block.id)}
+      {@const prev = rows[i - 1]}
+      {@const block = row.kind === 'single' ? row.block : row.text}
+      {@const stacked =
+        row.kind === 'single' &&
+        block.kind === 'tool' &&
+        prev?.kind === 'single' &&
+        prev.block.kind === 'tool'}
+      <div
+        class="row"
+        class:tucked={stacked}
+        class:msg-user={row.kind === 'single' && block.kind === 'text' && block.role === 'user'}
+        class:msg-assistant={row.kind === 'grok' || (row.kind === 'single' && block.kind === 'text' && block.role === 'assistant')}
+        class:after-user={
+          (row.kind === 'grok' || (row.kind === 'single' && block.kind === 'text' && block.role === 'assistant')) &&
+          prev?.kind === 'single' &&
+          prev.block.kind === 'text' &&
+          prev.block.role === 'user'
+        }
+      >
+        {#if row.kind === 'grok'}
+          <div class="bubble assistant" class:gb-caret={row.text.streaming}>
             <div class="role gb-kicker">Grok</div>
-            <div class="body">
-              <Markdown text={block.text} />
-            </div>
+            {#each row.thoughts as thought (thought.id)}
+              <div class="nested-think">
+                <Thinking block={thought} autoExpand={autoExpandThinking} />
+              </div>
+            {/each}
+            {#if row.text.text}
+              <div class="body">
+                <Markdown text={row.text.text} />
+              </div>
+            {/if}
           </div>
+        {:else if block.kind === 'text'}
+          {#if block.role === 'user'}
+            <div class="bubble user" class:was-queued={block.wasQueued}>
+              <div class="role-row">
+                <div class="role gb-kicker">You</div>
+                {#if block.wasQueued}
+                  <span class="queue-pill" title="This was sent from the queue">queued</span>
+                {/if}
+              </div>
+              {#if block.images?.length}
+                <div class="imgs">
+                  {#each block.images as img (img.id)}
+                    <img class="img" src={thumb(img)} alt={img.name ?? 'attachment'} title={img.path ?? img.name} />
+                  {/each}
+                </div>
+              {/if}
+              {#if block.text}
+                <div class="body">{block.text}</div>
+              {/if}
+            </div>
+          {:else}
+            <div class="bubble assistant" class:gb-caret={block.streaming}>
+              <div class="role gb-kicker">Grok</div>
+              <div class="body">
+                <Markdown text={block.text} />
+              </div>
+            </div>
+          {/if}
+        {:else if block.kind === 'thinking'}
+          <Thinking {block} autoExpand={autoExpandThinking} />
+        {:else if block.kind === 'tool'}
+          <ToolCard {block} {cwd} {onOpenPath} {onOpenDiff} {stacked} />
+        {:else if block.kind === 'proposedPlan'}
+          <PlanProposal {block} onDecide={onPlanDecision} />
+        {:else if block.kind === 'question'}
+          <Question {block} onAnswer={onAnswerQuestion} />
+        {:else if block.kind === 'approval'}
+          <Approval {block} onDecide={onApprove} />
+        {:else if block.kind === 'notice'}
+          <Notice {block} {onShowLog} />
+        {:else if block.kind === 'turn'}
+          <TurnFooter {block} />
         {/if}
-      {:else if block.kind === 'thinking'}
-        <Thinking {block} autoExpand={autoExpandThinking} />
-      {:else if block.kind === 'tool'}
-        <ToolCard {block} {cwd} {onOpenPath} {onOpenDiff} {stacked} />
-      {:else if block.kind === 'plan'}
-        <TodoList {block} />
-      {:else if block.kind === 'proposedPlan'}
-        <PlanProposal {block} onDecide={onPlanDecision} />
-      {:else if block.kind === 'question'}
-        <Question {block} onAnswer={onAnswerQuestion} />
-      {:else if block.kind === 'approval'}
-        <Approval {block} onDecide={onApprove} />
-      {:else if block.kind === 'notice'}
-        <Notice {block} {onShowLog} />
-      {:else if block.kind === 'turn'}
-        <TurnFooter {block} />
-      {/if}
-    </div>
-  {/each}
+      </div>
+    {/each}
+
+    <!--
+      Quiet gaps between thought → tools → more tools are normal (model is still on the wire).
+      This row keeps the turn feeling alive so a 5s pause does not look like a hang.
+    -->
+    {#if busy}
+      <div class="working" aria-live="polite" aria-busy="true">
+        <span class="pulse-ring" aria-hidden="true"></span>
+        <span class="working-copy">
+          <span class="working-title">{workingHint}</span>
+          <span class="working-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          {#if busySeconds > 0}
+            <span class="working-time" title="Time on this turn">{formatBusy(busySeconds)}</span>
+          {/if}
+        </span>
+      </div>
+    {/if}
+  </div>
+
+  {#if !stuck && visible.length > 0}
+    <button class="jump" type="button" title="Jump to latest" aria-label="Jump to latest" onclick={scrollToBottom}>
+      <Icon name="arrowDown" size={14} />
+      <span>Latest</span>
+    </button>
+  {/if}
 </div>
 
 <style>
+  .wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
   .scroller {
     flex: 1 1 auto;
     overflow-y: auto;
@@ -118,22 +302,150 @@
     gap: 12px;
   }
 
+  .working {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+    padding: 8px 10px;
+    border: 1px dashed color-mix(in srgb, var(--gb-accent) 45%, var(--gb-rule));
+    background: color-mix(in srgb, var(--gb-accent) 8%, transparent);
+    color: var(--gb-dim);
+    font-size: 0.9em;
+  }
+
+  .pulse-ring {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gb-accent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gb-accent) 55%, transparent);
+    animation: live-pulse 1.6s ease-out infinite;
+  }
+
+  @keyframes live-pulse {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--gb-accent) 50%, transparent);
+      opacity: 1;
+    }
+    70% {
+      box-shadow: 0 0 0 8px transparent;
+      opacity: 0.85;
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+      opacity: 1;
+    }
+  }
+
+  .working-copy {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .working-title {
+    color: var(--vscode-foreground);
+    font-weight: 700;
+    font-size: 0.95em;
+  }
+
+  .working-dots {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .working-dots i {
+    display: block;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--gb-accent);
+    opacity: 0.35;
+    animation: dot-bounce 1.2s ease-in-out infinite;
+  }
+
+  .working-dots i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .working-dots i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes dot-bounce {
+    0%,
+    80%,
+    100% {
+      opacity: 0.3;
+      transform: translateY(0);
+    }
+    40% {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
+
+  .working-time {
+    font-family: var(--gb-mono);
+    font-size: 0.85em;
+    color: var(--gb-dim);
+  }
+
+  .jump {
+    position: absolute;
+    right: 14px;
+    bottom: 12px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: 1px solid var(--gb-rule-strong, var(--gb-rule));
+    border-radius: 999px;
+    background: var(--vscode-button-secondaryBackground, var(--gb-surface));
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: var(--gb-shadow);
+    cursor: pointer;
+  }
+
+  .jump:hover {
+    border-color: var(--gb-accent);
+    color: var(--gb-accent);
+  }
+
   .row {
+    position: relative;
+    z-index: 0;
     min-width: 0;
   }
 
-  /* Cancels the column gap so consecutive tool cards butt up into one stack. */
   .row.tucked {
     margin-top: -12px;
   }
 
-  /* User turns sit slightly apart so the thread reads as a dialogue, not one wall of text. */
   .row.msg-user {
-    margin-top: 2px;
+    margin-top: 4px;
+  }
+
+  /* Clearer turn separation: You → Grok and Grok → You. */
+  .row.after-user {
+    margin-top: 14px;
   }
 
   .row.msg-assistant + .row.msg-user {
-    margin-top: 4px;
+    margin-top: 14px;
+  }
+
+  .nested-think {
+    margin: 2px 0 8px;
   }
 
   .bubble {
@@ -143,6 +455,17 @@
   .role {
     margin-bottom: 4px;
     letter-spacing: 0.04em;
+  }
+
+  .role-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 4px;
+  }
+
+  .role-row .role {
+    margin-bottom: 0;
   }
 
   .user .role {
@@ -156,7 +479,11 @@
   .user {
     padding: 8px 10px;
     border-left: 3px solid var(--gb-accent);
-    background: color-mix(in srgb, var(--gb-accent) 10%, var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.12)));
+    background: color-mix(
+      in srgb,
+      var(--gb-accent) 10%,
+      var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.12))
+    );
     border-radius: var(--gb-radius);
   }
 
@@ -166,24 +493,44 @@
     color: var(--vscode-foreground);
   }
 
-  /* Waiting for the current turn to finish — dimmed so it reads as "not sent yet". */
-  .user.queued {
-    opacity: 0.7;
-    border-left-style: dashed;
+  /* After force-push / auto-flush — in chat, with a permanent badge. */
+  .user.was-queued {
+    border-left-color: var(--gb-warn);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gb-warn) 28%, transparent);
+  }
+
+  .queue-pill {
+    flex: 0 0 auto;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--gb-warn) 85%, transparent);
+    color: var(--vscode-editor-background);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .imgs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .img {
+    max-width: 100%;
+    max-height: 160px;
+    border: 1px solid var(--gb-rule);
+    border-radius: var(--gb-radius);
+    object-fit: contain;
+    background: var(--gb-surface-sunken);
   }
 
   .assistant {
+    position: relative;
+    z-index: 0;
     padding: 2px 0 2px 2px;
-  }
-
-  .assistant .body {
-    padding-left: 0;
-  }
-
-  .tag {
-    margin-left: 7px;
-    white-space: nowrap;
-    vertical-align: middle;
   }
 
   .empty {

@@ -36,11 +36,19 @@
 </div>
 
 <style>
-  /* Dashed, so a train of thought never reads as a section rule. */
+  /*
+   * Own a solid surface so expanded thought never paints over the following "Grok" bubble
+   * (stacking/overlap in the narrow sidebar).
+   */
   .thinking {
+    position: relative;
+    z-index: 0;
+    margin: 2px 0 6px;
+    padding: 6px 8px 6px 9px;
     border-left: 2px dashed var(--gb-rule);
-    padding-left: 9px;
+    background: color-mix(in srgb, var(--gb-think) 8%, var(--vscode-editor-background));
     color: var(--gb-dim);
+    isolation: isolate;
   }
 
   .thinking.streaming {
@@ -70,6 +78,7 @@
   .chev {
     display: flex;
     align-items: center;
+    flex: 0 0 auto;
     transition: transform 0.12s ease;
   }
 
@@ -78,6 +87,7 @@
   }
 
   .title {
+    flex: 0 0 auto;
     font-style: italic;
     font-weight: 600;
   }
@@ -86,12 +96,15 @@
     display: flex;
     gap: 4px;
     flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .body {
+    margin-top: 4px;
     font-size: 0.94em;
     opacity: 0.9;
-    max-height: 28em;
+    max-height: 16em;
     overflow: auto;
   }
 </style>

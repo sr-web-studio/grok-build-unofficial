@@ -1,40 +1,99 @@
 <script lang="ts">
   import type { AvailableCommand } from '../../src/acp/types';
-  import type { AgentState } from '../../src/shared/protocol';
+  import type {
+    PermissionMode,
+    PromptImage,
+    QueuedMessage,
+    UiStatus,
+  } from '../../src/shared/protocol';
+  import Icon from './Icon.svelte';
 
   interface Props {
     text: string;
-    agentState: AgentState;
+    status: UiStatus;
     commands: AvailableCommand[];
-    queuedCount: number;
-    /** Bumped by App when the host asks for focus. */
+    queuedMessages: QueuedMessage[];
     focusSignal: number;
-    onSend: (text: string) => void;
+    onSend: (text: string, images?: PromptImage[]) => void;
     onCancel: () => void;
     onClearQueue: () => void;
+    onPushQueue: (id?: string) => void;
+    onSetModel: (modelId: string) => void;
+    onSetEffort: (effort: string) => void;
+    onSetPermissionMode: (mode: PermissionMode) => void;
+    onRestart: () => void;
   }
 
   let {
     text = $bindable(),
-    agentState,
+    status,
     commands,
-    queuedCount,
+    queuedMessages,
     focusSignal,
     onSend,
     onCancel,
     onClearQueue,
+    onPushQueue,
+    onSetModel,
+    onSetEffort,
+    onSetPermissionMode,
+    onRestart,
   }: Props = $props();
 
-  /** The box grows with the text up to this, then scrolls. */
   const MAX_HEIGHT = 220;
+  const MAX_IMAGES = 6;
 
   let input = $state<HTMLTextAreaElement | null>(null);
+  let fileInput = $state<HTMLInputElement | null>(null);
   let picked = $state(0);
+  let attachments = $state<PromptImage[]>([]);
 
+  const agentState = $derived(status.agentState);
   const busy = $derived(agentState === 'thinking' || agentState === 'awaitingApproval');
   const stopped = $derived(agentState === 'stopped');
+  const canSubmit = $derived(Boolean(text.trim() || attachments.length));
+  const queuedCount = $derived(queuedMessages.length);
 
-  /** Only offer commands while the first word is still being typed. */
+  const modes: {
+    id: PermissionMode;
+    label: string;
+    hint: string;
+    tone: 'neutral' | 'plan' | 'warn' | 'danger';
+  }[] = [
+    {
+      id: 'default',
+      label: 'Ask',
+      hint: 'Ask — approve every file write and every command',
+      tone: 'neutral',
+    },
+    {
+      id: 'acceptEdits',
+      label: 'Accept edits',
+      hint: 'Accept edits — writes auto-apply, commands still ask',
+      tone: 'warn',
+    },
+    {
+      id: 'plan',
+      label: 'Plan',
+      hint: 'Plan — read-only until you approve a plan',
+      tone: 'plan',
+    },
+    {
+      id: 'bypassPermissions',
+      label: 'Bypass',
+      hint: 'Bypass — no prompts; agent writes and runs freely',
+      tone: 'danger',
+    },
+  ];
+
+  function optionLabel(m: (typeof modes)[number]): string {
+    return m.tone === 'danger' ? `⚠ ${m.label}` : m.tone === 'warn' ? `${m.label} ⚠` : m.label;
+  }
+
+  const model = $derived(status.models.find((m) => m.modelId === status.currentModelId));
+  const efforts = $derived(model?.reasoningEfforts ?? []);
+  const mode = $derived(modes.find((m) => m.id === status.permissionMode) ?? modes[0]);
+
   const matches = $derived.by(() => {
     const m = /^\/([\w:-]*)$/.exec(text);
     if (!m) return [];
@@ -48,15 +107,12 @@
   });
 
   $effect(() => {
-    // Keep the highlighted row inside the (re-filtered) list.
     if (picked >= matches.length) picked = 0;
   });
 
   function autogrow(el: HTMLTextAreaElement) {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
-    // Scroll only once the text really is taller than the cap. Left on `auto`, a one-row box
-    // whose placeholder wraps to two lines paints a scrollbar over an empty input.
     el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
   }
 
@@ -69,9 +125,11 @@
 
   function submit() {
     const value = text.trim();
-    if (!value) return;
-    onSend(value);
+    if (!value && attachments.length === 0) return;
+    const imgs = attachments.length ? [...attachments] : undefined;
+    onSend(value, imgs);
     text = '';
+    attachments = [];
     if (input) {
       input.style.height = 'auto';
       input.style.overflowY = 'hidden';
@@ -109,6 +167,64 @@
       onCancel();
     }
   }
+
+  async function addFiles(files: FileList | File[]) {
+    const list = [...files].filter((f) => f.type.startsWith('image/'));
+    for (const file of list) {
+      if (attachments.length >= MAX_IMAGES) break;
+      const data = await readAsBase64(file);
+      attachments = [
+        ...attachments,
+        {
+          id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          mimeType: file.type || 'image/png',
+          data,
+          name: file.name,
+        },
+      ];
+    }
+  }
+
+  function readAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result ?? '');
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function onPaste(event: ClipboardEvent) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    const images: File[] = [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) images.push(file);
+      }
+    }
+    if (images.length === 0) return;
+    event.preventDefault();
+    void addFiles(images);
+  }
+
+  function removeAttachment(id: string) {
+    attachments = attachments.filter((a) => a.id !== id);
+  }
+
+  function thumb(img: PromptImage): string {
+    return `data:${img.mimeType};base64,${img.data}`;
+  }
+
+  function preview(t: string): string {
+    const s = t.trim() || '(image)';
+    return s.length > 90 ? `${s.slice(0, 87)}…` : s;
+  }
 </script>
 
 <div class="composer">
@@ -123,40 +239,123 @@
     </div>
   {/if}
 
-  <!-- Text on its own row above the buttons, so a one-line prompt starts at the top of the box
-       instead of floating at the bottom next to a two-line-tall Send button. -->
+  {#if queuedCount > 0}
+    <div class="queue">
+      <div class="queue-head">
+        <span class="queue-badge">{queuedCount}</span>
+        <span class="queue-title">Waiting to send</span>
+        <button class="link strong" type="button" onclick={() => onPushQueue()}>Send all now</button>
+        <button class="link" type="button" onclick={onClearQueue}>Clear</button>
+      </div>
+      <ul class="queue-list">
+        {#each queuedMessages as item (item.id)}
+          <li>
+            <span class="q-text" title={item.text}>{preview(item.text)}</span>
+            {#if item.images?.length}
+              <span class="q-meta">{item.images.length} img</span>
+            {/if}
+            <button class="link strong tiny" type="button" onclick={() => onPushQueue(item.id)}>Send</button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
+
+  <!-- Text only — actions live on the toolbar below so model/effort sit next to Send. -->
   <div class="box">
+    {#if attachments.length > 0}
+      <div class="thumbs">
+        {#each attachments as img (img.id)}
+          <div class="thumb">
+            <img src={thumb(img)} alt={img.name ?? 'attachment'} />
+            <button class="rm" type="button" title="Remove" aria-label="Remove attachment" onclick={() => removeAttachment(img.id)}>
+              <Icon name="close" size={11} />
+            </button>
+          </div>
+        {/each}
+      </div>
+    {/if}
     <textarea
       bind:this={input}
       bind:value={text}
       rows="1"
-      placeholder={busy ? 'Queue a follow-up…' : 'Ask, or / for commands…'}
+      placeholder={busy ? 'Queue a follow-up…' : 'Ask, paste a screenshot, or / for commands…'}
       onkeydown={onKeydown}
+      onpaste={onPaste}
       oninput={(e) => autogrow(e.currentTarget)}
     ></textarea>
-    <div class="buttons">
-      {#if busy}
-        <button class="stop" onclick={onCancel} title="Stop the current turn (Esc)">Stop</button>
-      {/if}
-      <button class="send" onclick={submit} disabled={!text.trim()}>
-        {busy ? 'Queue' : stopped ? 'Start' : 'Send'}
+    <div class="attach-row">
+      <input
+        bind:this={fileInput}
+        type="file"
+        accept="image/*"
+        multiple
+        class="file"
+        onchange={(e) => {
+          const files = e.currentTarget.files;
+          if (files?.length) void addFiles(files);
+          e.currentTarget.value = '';
+        }}
+      />
+      <button class="icon-btn" type="button" title="Attach image" aria-label="Attach image" onclick={() => fileInput?.click()}>
+        <Icon name="image" size={15} />
       </button>
     </div>
   </div>
 
-  {#if queuedCount > 0}
-    <div class="queued">
-      <span>
-        {queuedCount} message{queuedCount === 1 ? '' : 's'} waiting — {queuedCount === 1 ? 'it goes' : 'they go'}
-        to Grok when this turn ends
-      </span>
-      <button class="link" onclick={onClearQueue}>Clear</button>
-    </div>
-  {/if}
+  <div class="toolbar" class:warn={mode.tone === 'warn'} class:danger={mode.tone === 'danger'}>
+    <select
+      class="mode {mode.tone}"
+      title={mode.hint}
+      value={status.permissionMode}
+      onchange={(e) => onSetPermissionMode(e.currentTarget.value as PermissionMode)}
+    >
+      {#each modes as m (m.id)}
+        <option value={m.id} title={m.hint}>{optionLabel(m)}</option>
+      {/each}
+    </select>
+
+    <select
+      title="Model"
+      value={status.currentModelId ?? ''}
+      onchange={(e) => onSetModel(e.currentTarget.value)}
+      disabled={status.models.length === 0}
+    >
+      {#if status.models.length === 0}
+        <option value="">{stopped ? 'not started' : 'loading…'}</option>
+      {/if}
+      {#each status.models as m (m.modelId)}
+        <option value={m.modelId}>{m.name}</option>
+      {/each}
+    </select>
+
+    {#if efforts.length > 0}
+      <select
+        title="Reasoning effort"
+        value={status.reasoningEffort ?? ''}
+        onchange={(e) => onSetEffort(e.currentTarget.value)}
+      >
+        {#each efforts as effort (effort.id)}
+          <option value={effort.id} title={effort.description}>{effort.label}</option>
+        {/each}
+      </select>
+    {/if}
+
+    <span class="spacer"></span>
+
+    {#if stopped}
+      <button class="restart" type="button" title="Restart the agent" onclick={onRestart}>Restart</button>
+    {/if}
+    {#if busy}
+      <button class="stop" type="button" onclick={onCancel} title="Stop the current turn (Esc)">Stop</button>
+    {/if}
+    <button class="send" type="button" onclick={submit} disabled={!canSubmit}>
+      {busy ? 'Queue' : stopped ? 'Start' : 'Send'}
+    </button>
+  </div>
 </div>
 
 <style>
-  /* The mode bar directly above owns the section rule now — a second one here would double it. */
   .composer {
     flex: 0 0 auto;
     padding: 4px 10px 10px;
@@ -171,7 +370,6 @@
     max-height: 150px;
     overflow-y: auto;
     border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
     background: var(--gb-surface);
   }
 
@@ -183,7 +381,6 @@
     padding: 5px 8px;
     border: none;
     border-bottom: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
     background: none;
     color: var(--vscode-foreground);
     font: inherit;
@@ -220,24 +417,114 @@
     color: var(--gb-dim);
   }
 
-  .command.picked .desc {
-    color: inherit;
-    opacity: 0.85;
+  .queue {
+    border: 1px solid color-mix(in srgb, var(--gb-warn) 55%, var(--gb-rule));
+    border-left: 3px solid var(--gb-warn);
+    background: color-mix(in srgb, var(--gb-warn) 12%, var(--vscode-editor-background));
+  }
+
+  .queue-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--gb-warn) 30%, transparent);
+  }
+
+  .queue-badge {
+    flex: 0 0 auto;
+    min-width: 1.4em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--gb-warn);
+    color: var(--vscode-editor-background);
+    font-family: var(--gb-mono);
+    font-weight: 800;
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .queue-title {
+    flex: 1 1 auto;
+    font-size: var(--gb-meta-size);
+    font-weight: 700;
+  }
+
+  .queue-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    max-height: 9em;
+    overflow: auto;
+  }
+
+  .queue-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .q-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .q-meta {
+    flex: 0 0 auto;
+    color: var(--gb-dim);
+    font-size: 11px;
   }
 
   .box {
     display: flex;
     flex-direction: column;
-    align-items: stretch;
     gap: 6px;
     border: 1px solid var(--vscode-input-border, var(--gb-rule));
-    border-radius: var(--gb-radius);
     background: var(--vscode-input-background);
-    padding: 7px 8px;
+    padding: 7px 8px 4px;
   }
 
   .box:focus-within {
     border-color: var(--vscode-focusBorder);
+  }
+
+  .thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .thumb {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    border: 1px solid var(--gb-rule);
+    overflow: hidden;
+    background: var(--gb-surface-sunken);
+  }
+
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .rm {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    padding: 1px;
+    border: none;
+    background: color-mix(in srgb, var(--vscode-editor-background) 80%, transparent);
+    color: var(--vscode-foreground);
+    cursor: pointer;
   }
 
   textarea {
@@ -260,31 +547,104 @@
     outline: none;
   }
 
-  .buttons {
-    flex: 0 0 auto;
+  .attach-row {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
+  }
+
+  .file {
+    display: none;
+  }
+
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 5px;
+    border: none;
+    background: none;
+    color: var(--gb-dim);
+    cursor: pointer;
+  }
+
+  .icon-btn:hover {
+    color: var(--vscode-foreground);
+  }
+
+  /* Permission + model + effort + Send on one row under the text box. */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 5px;
+    row-gap: 5px;
+    padding: 2px 0 0;
+    border-top: 2px solid var(--gb-rule-strong);
+    padding-top: 7px;
+  }
+
+  .toolbar.warn {
+    border-top-color: var(--gb-warn);
+  }
+
+  .toolbar.danger {
+    border-top-color: var(--gb-danger);
+  }
+
+  .spacer {
+    flex: 1 1 auto;
+  }
+
+  select {
+    max-width: 10.5em;
+    min-width: 0;
+    appearance: none;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    border: 1px solid var(--vscode-dropdown-border, var(--gb-rule));
+    font: inherit;
+    font-size: var(--gb-kicker-size);
+    font-weight: 700;
+    padding: 4px 7px;
+    cursor: pointer;
+  }
+
+  select:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  select.mode.plan {
+    color: var(--gb-plan);
+    border-color: var(--gb-plan);
+  }
+
+  select.mode.warn {
+    color: var(--gb-warn);
+    border-color: var(--gb-warn);
+    background: color-mix(in srgb, var(--gb-warn) 14%, var(--vscode-dropdown-background));
+  }
+
+  select.mode.danger {
+    color: var(--gb-danger);
+    border-color: var(--gb-danger);
+    background: color-mix(in srgb, var(--gb-danger) 16%, var(--vscode-dropdown-background));
   }
 
   button.send,
-  button.stop {
+  button.stop,
+  button.restart {
     padding: 4px 14px;
     border: 1px solid transparent;
-    border-radius: var(--gb-radius);
     font: inherit;
     font-size: 12px;
     font-weight: 800;
     cursor: pointer;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
   }
 
-  /* Stop is an outline, not a second solid button — one filled action per row. */
-  button.stop {
-    background: none;
-    border-color: var(--gb-warn);
-    color: var(--gb-warn);
+  button.send {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
   }
 
   button.send:disabled {
@@ -292,16 +652,16 @@
     cursor: default;
   }
 
-  .queued {
-    display: flex;
-    align-items: baseline;
-    gap: 7px;
-    font-size: var(--gb-meta-size);
-    color: var(--gb-dim);
+  button.stop {
+    background: none;
+    border-color: var(--gb-warn);
+    color: var(--gb-warn);
   }
 
-  .queued span {
-    flex: 1 1 auto;
+  button.restart {
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    border-color: var(--gb-rule);
   }
 
   button.link {
@@ -310,9 +670,22 @@
     background: none;
     padding: 0;
     font: inherit;
+    font-size: 11px;
     font-weight: 700;
     text-decoration: underline;
     color: var(--gb-accent);
     cursor: pointer;
+  }
+
+  button.link.strong {
+    text-decoration: none;
+    padding: 2px 8px;
+    border: 1px solid var(--gb-accent);
+    background: color-mix(in srgb, var(--gb-accent) 16%, transparent);
+  }
+
+  button.link.tiny {
+    padding: 1px 6px;
+    font-size: 10px;
   }
 </style>

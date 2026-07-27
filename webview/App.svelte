@@ -4,6 +4,7 @@
     ApprovalDecision,
     HostMessage,
     PermissionMode,
+    PromptImage,
     QuestionResponse,
     RewindPoint,
     SessionSummary,
@@ -15,7 +16,7 @@
   import Composer from './components/Composer.svelte';
   import Header from './components/Header.svelte';
   import Icon from './components/Icon.svelte';
-  import ModeBar from './components/ModeBar.svelte';
+  import PlanDock from './components/PlanDock.svelte';
   import StatusLine from './components/StatusLine.svelte';
   import Transcript from './components/Transcript.svelte';
   import { loadDraft, onHostMessage, saveDraft, send } from './ipc';
@@ -35,6 +36,7 @@
       turns: 0,
     },
     queuedCount: 0,
+    queuedMessages: [],
   };
 
   let status = $state<UiStatus>(initialStatus);
@@ -145,8 +147,8 @@
     revision += 1;
   }
 
-  function onSend(text: string): void {
-    send({ type: 'prompt', text });
+  function onSend(text: string, images?: PromptImage[]): void {
+    send({ type: 'prompt', text, images });
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -484,6 +486,7 @@
     {autoExpandThinking}
     cwd={status.cwd}
     {revision}
+    agentState={status.agentState}
     onApprove={(requestId, decision: ApprovalDecision) =>
       send({ type: 'approve', requestId, decision })}
     onPlanDecision={(requestId, approve, feedback) =>
@@ -495,23 +498,24 @@
     onShowLog={() => send({ type: 'showLog' })}
   />
 
-  <ModeBar
-    {status}
-    onSetModel={(modelId) => send({ type: 'setModel', modelId })}
-    onSetEffort={(effort) => send({ type: 'setReasoningEffort', effort })}
-    onSetPermissionMode={(mode: PermissionMode) => send({ type: 'setPermissionMode', mode })}
-    onRestart={() => send({ type: 'restartAgent' })}
-  />
+  {#if status.planEntries?.length}
+    <PlanDock entries={status.planEntries} />
+  {/if}
 
   <Composer
     bind:text={draft}
-    agentState={status.agentState}
+    {status}
     commands={status.availableCommands}
-    queuedCount={status.queuedCount}
+    queuedMessages={status.queuedMessages ?? []}
     {focusSignal}
     {onSend}
     onCancel={() => send({ type: 'cancel' })}
     onClearQueue={() => send({ type: 'clearQueue' })}
+    onPushQueue={(id) => send({ type: 'pushQueue', blockId: id })}
+    onSetModel={(modelId) => send({ type: 'setModel', modelId })}
+    onSetEffort={(effort) => send({ type: 'setReasoningEffort', effort })}
+    onSetPermissionMode={(mode: PermissionMode) => send({ type: 'setPermissionMode', mode })}
+    onRestart={() => send({ type: 'restartAgent' })}
   />
 </div>
 

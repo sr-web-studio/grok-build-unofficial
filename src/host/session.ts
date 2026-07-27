@@ -8,6 +8,7 @@ import { redact } from '../acp/redact'
 import type {
   AgentModel,
   AvailableCommand,
+  ContentBlock,
   CreateTerminalParams,
   InitializeResponse,
   NewSessionResponse,
@@ -32,7 +33,9 @@ import type {
   ModelInfo,
   NoticeBlock,
   PermissionMode,
+  PromptImage,
   QuestionResponse,
+  QueuedMessage,
   RewindPoint,
   SessionSummary,
   TextBlock,
@@ -90,6 +93,9 @@ export interface SessionDeps {
   cwd: string
   post: (msg: HostMessage) => void
   log: (line: string) => void
+  /** Remember which session to resume for this workspace after reload. */
+  getLastSessionId?: () => string | undefined
+  setLastSessionId?: (sessionId: string | undefined) => void
 }
 
 interface Deferred<T> {
@@ -98,9 +104,9 @@ interface Deferred<T> {
 }
 
 interface QueuedInterjection {
-  /** The transcript block already showing this text, so the queue can un-flag or drop it. */
-  blockId: string
+  id: string
   text: string
+  images?: PromptImage[]
 }
 
 interface WorktreeEntry {
@@ -184,6 +190,15 @@ export class GrokSession implements vscode.Disposable {
   private turnActive = false
   private cancelling = false
   private readonly interjections: QueuedInterjection[] = []
+  /**
+   * Next prompt to run after the current turn is cancelled (force-push one queued message).
+   * Remaining interjections stay queued and flush afterward.
+   */
+  private forceNext:
+    | { text: string; images?: PromptImage[]; wasQueued?: boolean }
+    | undefined
+  /** From initialize — grok 0.2.x advertises `image: false`; we still save files as a fallback. */
+  private promptSupportsImage = false
   private rawRewindPoints = new Map<string, Record<string, unknown>>()
   private worktreeNotice: NoticeBlock | undefined
   private readonly knownSessions = new Map<string, SessionSummary>()
@@ -228,7 +243,24 @@ export class GrokSession implements vscode.Disposable {
         turns: 0,
       },
       queuedCount: 0,
+      queuedMessages: [],
     }
+  }
+
+  private syncQueueStatus(): void {
+    this.status.queuedCount = this.interjections.length
+    this.status.queuedMessages = this.interjections.map(
+      (i): QueuedMessage => ({
+        id: i.id,
+        text: i.text,
+        images: i.images,
+      }),
+    )
+    this.pushStatus()
+  }
+
+  private rememberSession(sessionId: string | undefined): void {
+    this.deps.setLastSessionId?.(sessionId)
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -303,12 +335,33 @@ export class GrokSession implements vscode.Disposable {
       this.status.agentVersion = init._meta?.agentVersion
       if (init._meta?.availableCommands)
         this.status.availableCommands = init._meta.availableCommands
+      this.promptSupportsImage = Boolean(
+        init.agentCapabilities?.promptCapabilities?.image,
+      )
+      // Seed model/effort menus before session/load — load does not always populate `models`,
+      // which left the UI stuck on "loading…" after resume.
+      this.seedModelsFromInit(init)
+      this.pushStatus()
 
-      const session = await client.request<NewSessionResponse>('session/new', {
-        cwd: this.deps.cwd,
-        mcpServers: [],
-      })
-      this.applySessionResponse(session)
+      // Prefer resuming the last real conversation for this folder — `session/new` always
+      // leaves a blank untitled session in grok's store if we call it on every panel open.
+      const resumed = await this.tryResumeSession(client)
+      if (!resumed) {
+        const session = await client.request<NewSessionResponse>(
+          'session/new',
+          {
+            cwd: this.deps.cwd,
+            mcpServers: [],
+          },
+        )
+        this.applySessionResponse(session)
+        // Brand-new blank session is not "used" yet; don't pin it as last until a prompt lands.
+      }
+      // Never block the idle transition on a hung set_model — menus already have seed data.
+      await Promise.race([
+        this.applyPreferredConfig(),
+        new Promise<void>((r) => setTimeout(r, 2500)),
+      ])
     } catch (err) {
       const message =
         err instanceof RpcError
@@ -351,10 +404,158 @@ export class GrokSession implements vscode.Disposable {
     const selectedEffort = session._meta?.['x.ai/sessionConfig']?.options?.find(
       (o) => o.category === 'mode' && o.selected,
     )
+    // Prefer the user's saved effort/model over whatever the agent advertised for a fresh session.
+    const preferred = settings()
     this.status.reasoningEffort =
-      selectedEffort?.id ??
-      current?._meta?.reasoningEffort ??
+      preferred.reasoningEffort ||
+      selectedEffort?.id ||
+      current?._meta?.reasoningEffort ||
       this.status.reasoningEffort
+    this.status.permissionMode = preferred.permissionMode
+    this.gate.setMode(preferred.permissionMode)
+  }
+
+  /**
+   * Resume last session for this cwd (workspaceState) or the most recent on-disk session with
+   * messages. Avoids creating a fresh untitled entry on every VS Code reload.
+   */
+  private async tryResumeSession(client: AcpClient): Promise<boolean> {
+    const candidates: string[] = []
+    const remembered = this.deps.getLastSessionId?.()
+    if (remembered) candidates.push(remembered)
+    const onDisk = await readSessionsFromDisk(this.deps.cwd, this.deps.log)
+    onDisk.sort((a, b) => b.updatedAt - a.updatedAt)
+    for (const s of onDisk) {
+      if (!candidates.includes(s.sessionId)) candidates.push(s.sessionId)
+    }
+    for (const sessionId of candidates) {
+      try {
+        this.clearTranscript()
+        this.status.planEntries = undefined
+        // load can return the same shape as session/new (models + meta) — apply if present.
+        const loaded = await client.request<NewSessionResponse>(
+          'session/load',
+          {
+            sessionId,
+            cwd: this.deps.cwd,
+            mcpServers: [],
+          },
+        )
+        if (loaded?.sessionId) {
+          // Preserve seed models if load omits the list (common).
+          const seededModels = this.status.models
+          const seededModelId = this.status.currentModelId
+          this.applySessionResponse(loaded)
+          if (this.status.models.length === 0 && seededModels.length > 0) {
+            this.status.models = seededModels
+            this.status.currentModelId =
+              seededModelId ?? seededModels[0]?.modelId
+          }
+        } else {
+          this.sessionId = sessionId
+          this.status.sessionId = sessionId
+        }
+        this.sessionUsed = true
+        const known = this.knownSessions.get(sessionId)
+        const disk = onDisk.find((s) => s.sessionId === sessionId)
+        this.status.sessionTitle =
+          known?.title && known.title !== '(untitled)'
+            ? known.title
+            : disk?.title && disk.title !== '(untitled)'
+              ? disk.title
+              : (this.status.sessionTitle ?? known?.title)
+        this.rememberSession(this.sessionId ?? sessionId)
+        this.closeStreams()
+        this.deps.log(`resumed session ${this.sessionId ?? sessionId}`)
+        this.pushStatus()
+        return true
+      } catch (err) {
+        this.deps.log(`resume ${sessionId} failed: ${(err as Error).message}`)
+        this.clearTranscript()
+      }
+    }
+    return false
+  }
+
+  /** Fill model/effort dropdowns from initialize when session/load skips the models object. */
+  private seedModelsFromInit(init: InitializeResponse): void {
+    if (this.status.models.length > 0) return
+    const ms = init._meta?.modelState as
+      | {
+          currentModelId?: string
+          availableModels?: AgentModel[]
+          defaultModelId?: string
+          models?: AgentModel[]
+        }
+      | undefined
+    const raw =
+      ms?.availableModels ??
+      ms?.models ??
+      (Array.isArray(ms) ? (ms as AgentModel[]) : undefined)
+    if (raw?.length) {
+      this.status.models = raw.map(toModelInfo)
+      this.status.currentModelId =
+        ms?.currentModelId ?? ms?.defaultModelId ?? raw[0]?.modelId
+      const cur = this.status.models.find(
+        (m) => m.modelId === this.status.currentModelId,
+      )
+      this.status.contextTokens = cur?.contextTokens
+      if (!this.status.reasoningEffort && cur?.reasoningEfforts?.length) {
+        this.status.reasoningEffort =
+          cur.reasoningEfforts.find((e) => e.id === 'high')?.id ??
+          cur.reasoningEfforts[0]?.id
+      }
+      return
+    }
+    // Last resort so the UI never sits on "loading…" with an empty list.
+    const fallbackId =
+      settings().model ||
+      (typeof ms?.currentModelId === 'string' ? ms.currentModelId : '') ||
+      'grok-4.5'
+    this.status.models = [
+      {
+        modelId: fallbackId,
+        name: fallbackId,
+        supportsReasoningEffort: true,
+        reasoningEfforts: [
+          { id: 'high', label: 'High Effort' },
+          { id: 'medium', label: 'Medium Effort' },
+          { id: 'low', label: 'Low Effort' },
+        ],
+      },
+    ]
+    this.status.currentModelId = fallbackId
+    this.status.reasoningEffort =
+      settings().reasoningEffort || this.status.reasoningEffort || 'high'
+  }
+
+  /**
+   * Re-apply user VS Code settings after session/new (agent defaults otherwise win every restart).
+   * Model / effort are written Global so they stick across workspaces.
+   */
+  private async applyPreferredConfig(): Promise<void> {
+    const s = settings()
+    this.gate.setMode(s.permissionMode)
+    this.status.permissionMode = s.permissionMode
+    if (s.model && s.model !== this.status.currentModelId) {
+      await this.setModel(s.model, /*persist*/ false)
+    }
+    if (
+      s.reasoningEffort &&
+      s.reasoningEffort !== this.status.reasoningEffort
+    ) {
+      await this.setReasoningEffort(s.reasoningEffort, /*persist*/ false)
+    }
+    this.pushStatus()
+  }
+
+  private persistSetting(key: string, value: string | undefined): void {
+    const config = vscode.workspace.getConfiguration(CONFIG_SECTION)
+    const v = value ?? ''
+    // Write both scopes: an older build stored permissionMode only on Workspace, which would
+    // otherwise keep winning over Global forever.
+    void config.update(key, v, vscode.ConfigurationTarget.Global)
+    void config.update(key, v, vscode.ConfigurationTarget.Workspace)
   }
 
   /** Keep status.sessionTitle and knownSessions in lockstep for the open chat. */
@@ -478,9 +679,10 @@ export class GrokSession implements vscode.Disposable {
 
   // ------------------------------------------------------------------ prompting
 
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, images?: PromptImage[]): Promise<void> {
     const trimmed = text.trim()
-    if (!trimmed) return
+    const imgs = images?.length ? images : undefined
+    if (!trimmed && !imgs?.length) return
     try {
       await this.ensureStarted()
     } catch {
@@ -488,40 +690,36 @@ export class GrokSession implements vscode.Disposable {
     }
     if (this.turnActive) {
       // Matches the CLI: typing during a turn interjects rather than being dropped.
-      this.interject(trimmed)
+      this.interject(trimmed, imgs)
       return
     }
+    const saved = await this.materializeImages(imgs)
     this.addBlock<TextBlock>({
       id: this.nextId('user'),
       ts: Date.now(),
       kind: 'text',
       role: 'user',
-      text: trimmed,
+      text: trimmed || (saved?.length ? '(image attachment)' : ''),
       streaming: false,
+      images: saved,
     })
-    await this.runTurn(trimmed)
+    await this.runTurn(trimmed, saved)
   }
 
-  private async runTurn(text: string): Promise<void> {
+  private async runTurn(text: string, images?: PromptImage[]): Promise<void> {
     const client = this.client
     if (!client || !this.sessionId) return
     this.sessionUsed = true
+    this.rememberSession(this.sessionId)
     this.turnActive = true
     this.cancelling = false
     this.status.agentState = 'thinking'
     this.pushStatus()
     try {
+      const prompt = await this.buildPromptBlocks(text, images)
       const res = await client.request<PromptResponse>('session/prompt', {
         sessionId: this.sessionId,
-        prompt: [
-          {
-            type: 'text',
-            text:
-              this.gate.getMode() === 'plan'
-                ? `${PLAN_MODE_PREAMBLE}\n\n${text}`
-                : text,
-          },
-        ],
+        prompt,
       })
       this.closeStreams()
       if (res.stopReason && res.stopReason !== 'end_turn') {
@@ -538,8 +736,72 @@ export class GrokSession implements vscode.Disposable {
       this.turnActive = false
       this.status.agentState = this.client?.running ? 'idle' : 'stopped'
       this.pushStatus()
-      await this.flushInterjections()
+      await this.flushAfterTurn()
     }
+  }
+
+  private async buildPromptBlocks(
+    text: string,
+    images?: PromptImage[],
+  ): Promise<ContentBlock[]> {
+    const body =
+      this.gate.getMode() === 'plan' ? `${PLAN_MODE_PREAMBLE}\n\n${text}` : text
+    const blocks: ContentBlock[] = []
+    const pathNotes: string[] = []
+    for (const img of images ?? []) {
+      if (this.promptSupportsImage && img.data) {
+        blocks.push({
+          type: 'image',
+          mimeType: img.mimeType,
+          data: img.data,
+        })
+      } else if (img.path) {
+        pathNotes.push(img.path)
+      }
+    }
+    let textOut = body
+    if (pathNotes.length) {
+      const note =
+        pathNotes.length === 1
+          ? `\n\n[Attached image saved at: ${pathNotes[0]} — open/read this file to inspect the screenshot. ACP image prompts are not enabled by this Grok CLI build.]`
+          : `\n\n[Attached images saved at:\n${pathNotes.map((p) => `- ${p}`).join('\n')}\nOpen/read these files to inspect the screenshots. ACP image prompts are not enabled by this Grok CLI build.]`
+      textOut = (textOut || 'Please look at the attached image(s).') + note
+    }
+    if (textOut) blocks.unshift({ type: 'text', text: textOut })
+    if (blocks.length === 0) blocks.push({ type: 'text', text: text || '' })
+    return blocks
+  }
+
+  /**
+   * Write pasted images under the workspace so the agent can open them even when
+   * `promptCapabilities.image` is false (current Grok CLI).
+   */
+  private async materializeImages(
+    images?: PromptImage[],
+  ): Promise<PromptImage[] | undefined> {
+    if (!images?.length) return undefined
+    const dir = path.join(this.deps.cwd, '.grok-attachments')
+    try {
+      await fsp.mkdir(dir, { recursive: true })
+    } catch (err) {
+      this.deps.log(`attachment dir: ${(err as Error).message}`)
+    }
+    const out: PromptImage[] = []
+    for (const img of images) {
+      const ext = mimeToExt(img.mimeType)
+      const name =
+        img.name?.replace(/[^\w.-]+/g, '_') ||
+        `paste-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`
+      const filePath = path.join(dir, name)
+      try {
+        await fsp.writeFile(filePath, Buffer.from(img.data, 'base64'))
+        out.push({ ...img, name, path: filePath })
+      } catch (err) {
+        this.deps.log(`save attachment ${name}: ${(err as Error).message}`)
+        out.push(img)
+      }
+    }
+    return out
   }
 
   /**
@@ -549,52 +811,119 @@ export class GrokSession implements vscode.Disposable {
    * in the ACP extension dispatcher (0.2.112 answers `-32601`, with or without `--leader`) — it
    * only exists on the private leader channel the TUI uses. So the queue is ours: the text is
    * shown immediately, held locally, and sent as the next prompt when the turn ends. Nothing is
-   * lost, it just lands one turn later than in the CLI.
+   * lost, it just lands one turn later than in the CLI. Use `pushQueue` to force-send early
+   * (cancels the current turn first).
    */
-  interject(text: string): void {
+  interject(text: string, images?: PromptImage[]): void {
     const trimmed = text.trim()
-    if (!trimmed) return
+    const imgs = images?.length ? images : undefined
+    if (!trimmed && !imgs?.length) return
     if (!this.turnActive) {
-      void this.prompt(trimmed)
+      void this.prompt(trimmed, imgs)
       return
     }
-    const block = this.addBlock<TextBlock>({
-      id: this.nextId('user'),
-      ts: Date.now(),
-      kind: 'text',
-      role: 'user',
-      text: trimmed,
-      streaming: false,
-      queued: true,
+    void this.enqueueWhileBusy(trimmed, imgs)
+  }
+
+  private async enqueueWhileBusy(
+    text: string,
+    images?: PromptImage[],
+  ): Promise<void> {
+    // Queue lives only in the composer (status.queuedMessages) — not in the transcript.
+    const saved = await this.materializeImages(images)
+    this.interjections.push({
+      id: this.nextId('queue'),
+      text: text || '',
+      images: saved,
     })
-    this.interjections.push({ blockId: block.id, text: trimmed })
-    this.status.queuedCount = this.interjections.length
-    this.pushStatus()
+    this.syncQueueStatus()
   }
 
   /** Drop everything typed during the turn without sending it. */
   clearQueue(): void {
-    if (this.interjections.length === 0) return
-    // The blocks were only ever a preview of unsent text, so they go with the queue.
-    for (const item of this.interjections) this.removeBlock(item.blockId)
+    if (this.interjections.length === 0 && !this.forceNext) return
     this.interjections.length = 0
-    this.status.queuedCount = 0
-    this.pushStatus()
+    this.forceNext = undefined
+    this.syncQueueStatus()
     this.addNotice('info', 'Queued messages discarded.')
+  }
+
+  /**
+   * Force queued text into Grok now. Stops the in-flight turn (if any); when it ends we send
+   * either one selected message (`blockId`) or the whole queue. Only then does it appear in chat.
+   */
+  async pushQueue(blockId?: string): Promise<void> {
+    if (this.interjections.length === 0 && !this.forceNext) {
+      this.addNotice('info', 'Nothing is waiting in the queue.')
+      return
+    }
+    if (blockId) {
+      const idx = this.interjections.findIndex((i) => i.id === blockId)
+      if (idx < 0) return
+      const [item] = this.interjections.splice(idx, 1)
+      this.forceNext = {
+        text: item.text,
+        images: item.images,
+        wasQueued: true,
+      }
+      this.syncQueueStatus()
+    }
+    if (this.turnActive) {
+      this.addNotice(
+        'info',
+        blockId
+          ? 'Stopping the current turn to send that message now…'
+          : 'Stopping the current turn to send the queue…',
+      )
+      this.cancel()
+      return
+    }
+    await this.flushAfterTurn()
+  }
+
+  private async flushAfterTurn(): Promise<void> {
+    if (this.forceNext) {
+      const next = this.forceNext
+      this.forceNext = undefined
+      this.addBlock<TextBlock>({
+        id: this.nextId('user'),
+        ts: Date.now(),
+        kind: 'text',
+        role: 'user',
+        text: next.text || (next.images?.length ? '(image attachment)' : ''),
+        streaming: false,
+        wasQueued: true,
+        images: next.images,
+      })
+      await this.runTurn(next.text, next.images)
+      return
+    }
+    await this.flushInterjections()
   }
 
   private async flushInterjections(): Promise<void> {
     const pending = this.interjections.splice(0)
-    this.status.queuedCount = 0
+    this.syncQueueStatus()
     if (pending.length === 0) return
-    // They are being sent now, so drop the "queued" styling but keep the blocks as the record —
-    // runTurn() deliberately doesn't add its own user block for this text.
+    // Land in the transcript only now, marked wasQueued so they read as "came from the queue".
     for (const item of pending) {
-      const block = this.blocks.find((b) => b.id === item.blockId)
-      if (block) this.patch(block, { queued: false })
+      this.addBlock<TextBlock>({
+        id: this.nextId('user'),
+        ts: Date.now(),
+        kind: 'text',
+        role: 'user',
+        text: item.text || (item.images?.length ? '(image attachment)' : ''),
+        streaming: false,
+        wasQueued: true,
+        images: item.images,
+      })
     }
-    this.pushStatus()
-    await this.runTurn(pending.map((i) => i.text).join('\n\n'))
+    const text = pending
+      .map((i) => i.text)
+      .filter(Boolean)
+      .join('\n\n')
+    const images = pending.flatMap((i) => i.images ?? [])
+    await this.runTurn(text, images.length ? images : undefined)
   }
 
   cancel(): void {
@@ -628,14 +957,13 @@ export class GrokSession implements vscode.Disposable {
     this.gate.setMode(mode)
     this.status.permissionMode = mode
     this.pushStatus()
-    void vscode.workspace
-      .getConfiguration(CONFIG_SECTION)
-      .update('permissionMode', mode, vscode.ConfigurationTarget.Workspace)
+    // Global so the choice survives restarts and is not lost when no .vscode/settings.json exists.
+    this.persistSetting('permissionMode', mode)
     // No protocol call here on purpose: grok has no client-settable plan mode over ACP. The mode
     // reaches the agent via PLAN_MODE_PREAMBLE on the next prompt, and is enforced by the gate.
   }
 
-  async setModel(modelId: string): Promise<void> {
+  async setModel(modelId: string, persist = true): Promise<void> {
     if (!this.client || !this.sessionId) return
     try {
       await this.client.request('session/set_model', {
@@ -645,6 +973,7 @@ export class GrokSession implements vscode.Disposable {
       this.status.currentModelId = modelId
       const m = this.status.models.find((x) => x.modelId === modelId)
       if (m?.contextTokens) this.status.contextTokens = m.contextTokens
+      if (persist) this.persistSetting('model', modelId)
       this.pushStatus()
     } catch (err) {
       this.addNotice(
@@ -655,7 +984,7 @@ export class GrokSession implements vscode.Disposable {
   }
 
   /** Reasoning effort is exposed by grok as an ACP *mode*, so `session/set_mode` is the setter. */
-  async setReasoningEffort(effort: string): Promise<void> {
+  async setReasoningEffort(effort: string, persist = true): Promise<void> {
     if (!this.client || !this.sessionId) return
     try {
       await this.client.request('session/set_mode', {
@@ -663,6 +992,7 @@ export class GrokSession implements vscode.Disposable {
         modeId: effort,
       })
       this.status.reasoningEffort = effort
+      if (persist) this.persistSetting('reasoningEffort', effort)
       this.pushStatus()
     } catch (err) {
       this.addNotice(
@@ -679,6 +1009,9 @@ export class GrokSession implements vscode.Disposable {
     }
     this.clearTranscript()
     this.gate.reset()
+    this.status.planEntries = undefined
+    this.interjections.length = 0
+    this.forceNext = undefined
     this.status.totals = {
       inputTokens: 0,
       outputTokens: 0,
@@ -687,6 +1020,7 @@ export class GrokSession implements vscode.Disposable {
       costUsd: 0,
       turns: 0,
     }
+    this.syncQueueStatus()
     // Nothing has been asked in the current session, so it *is* a new one — asking grok for
     // another would only add a second blank entry to the history for the same empty screen.
     if (this.sessionId && !this.sessionUsed) {
@@ -702,6 +1036,7 @@ export class GrokSession implements vscode.Disposable {
         },
       )
       this.applySessionResponse(session)
+      // Pin only after the user actually uses it (first prompt) — not the empty shell.
       this.pushStatus()
     } catch (err) {
       this.addNotice(
@@ -1082,14 +1417,19 @@ export class GrokSession implements vscode.Disposable {
           removed?: string[]
         }
         for (const s of p.upserted ?? []) {
+          // Never blank out a title we already know with a null/empty agent title.
+          const prev = this.knownSessions.get(s.sessionId)
+          const title =
+            (s.title && s.title.trim()) || prev?.title || '(untitled)'
           this.knownSessions.set(s.sessionId, {
             sessionId: s.sessionId,
-            title: s.title || '(untitled)',
+            title,
             cwd: s.cwd ?? this.deps.cwd,
             updatedAt: s.lastChangeUnixMs ?? Date.now(),
           })
-          if (s.sessionId === this.sessionId && s.title) {
-            this.status.sessionTitle = s.title
+          // Only adopt titles for the *open* session when the agent names that same id.
+          if (s.sessionId === this.sessionId && s.title && s.title.trim()) {
+            this.status.sessionTitle = s.title.trim()
             this.pushStatus()
           }
         }
@@ -1194,29 +1534,39 @@ export class GrokSession implements vscode.Disposable {
       case 'tool_call_update': {
         const p = update as ToolCallUpdatePayload
         this.closeStreams()
-        const block = this.ensureToolBlock(p.toolCallId, {})
+        // todo_write / "Plan write" is mirrored as a polished plan dock above the composer —
+        // keep the noisy tool card out of the transcript.
+        const xaiName = p._meta?.['x.ai/tool']?.name ?? ''
+        const xaiLabel = p._meta?.['x.ai/tool']?.label ?? ''
+        if (isPlanTool(xaiName, xaiLabel, p.title)) {
+          const existing = this.toolBlocks.get(p.toolCallId)
+          if (existing) {
+            this.removeBlock(existing.id)
+            this.toolBlocks.delete(p.toolCallId)
+          }
+          return
+        }
+        const block = this.ensureToolBlock(p.toolCallId, {
+          name: xaiName || undefined,
+        })
         this.applyToolPayload(block, p)
+        if (isPlanTool(block.name, block.label, block.title)) {
+          this.removeBlock(block.id)
+          this.toolBlocks.delete(p.toolCallId)
+        }
         return
       }
 
       case 'plan': {
         const entries = ((update as { entries?: PlanEntry[] }).entries ??
           []) as PlanEntry[]
-        // One todo list per prompt, updated in place — the CLI shows a single evolving checklist.
-        const existing = [...this.blocks]
-          .reverse()
-          .find(
-            (b) =>
-              b.kind === 'plan' && b.promptIndex === this.currentPromptIndex,
-          )
-        if (existing) this.patch(existing, { entries })
-        else
-          this.addBlock({
-            id: this.nextId('todo'),
-            ts: Date.now(),
-            kind: 'plan' as const,
-            entries,
-          })
+        // Live checklist lives above the composer — not as a chat bubble.
+        this.status.planEntries = entries
+        this.pushStatus()
+        // Drop any legacy plan cards left from older builds / session replay.
+        for (const b of [...this.blocks]) {
+          if (b.kind === 'plan') this.removeBlock(b.id)
+        }
         return
       }
 
@@ -1459,8 +1809,9 @@ export class GrokSession implements vscode.Disposable {
   }
 
   /**
-   * Renames a session via `_x.ai/session/rename` (confirmed on grok 0.2.112). Works for the open
-   * session and for history rows; the agent updates its store title used by the TUI and sessions list.
+   * Renames a session via `_x.ai/session/rename`. Only the targeted id is updated in our maps;
+   * if the agent also mutates the open session's title when renaming a *different* row (observed
+   * with blank/untitled residents), we restore the open session's previous title locally.
    */
   async renameSession(sessionId: string, title: string): Promise<void> {
     const clean = title.trim()
@@ -1472,9 +1823,33 @@ export class GrokSession implements vscode.Disposable {
       )
       return
     }
+    const openId = this.sessionId
+    const openTitleBefore = this.status.sessionTitle
+    const openKnownBefore = openId ? this.knownSessions.get(openId) : undefined
     try {
       await this.client.request(X.sessionRename, { sessionId, title: clean })
       this.setSessionTitle(sessionId, clean)
+      // Defend against the agent rewriting the *current* blank session when we renamed another.
+      if (openId && sessionId !== openId) {
+        if (openTitleBefore) {
+          this.status.sessionTitle = openTitleBefore
+          this.knownSessions.set(openId, {
+            sessionId: openId,
+            title: openTitleBefore,
+            cwd: openKnownBefore?.cwd ?? this.status.cwd ?? this.deps.cwd,
+            updatedAt: openKnownBefore?.updatedAt ?? Date.now(),
+          })
+        } else {
+          this.status.sessionTitle = undefined
+          if (openKnownBefore) {
+            this.knownSessions.set(openId, {
+              ...openKnownBefore,
+              title: '(untitled)',
+            })
+          }
+        }
+        this.pushStatus()
+      }
       await this.listSessions()
     } catch (err) {
       this.addNotice(
@@ -1529,6 +1904,7 @@ export class GrokSession implements vscode.Disposable {
       this.status.sessionTitle = this.knownSessions.get(sessionId)?.title
       // A resumed session already has history, so `+` must open a genuinely new one after this.
       this.sessionUsed = true
+      this.rememberSession(sessionId)
       this.closeStreams()
     } catch (err) {
       this.addNotice(
@@ -1925,6 +2301,25 @@ function prettifyToolName(name: string): string {
 }
 
 /** Replayed history includes anything we prepended, which the user never typed. */
+function mimeToExt(mime: string): string {
+  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg'
+  if (mime === 'image/webp') return 'webp'
+  if (mime === 'image/gif') return 'gif'
+  return 'png'
+}
+
+/** todo_write and similar — mirrored as the plan dock, not a tool card. */
+function isPlanTool(name?: string, label?: string, title?: string): boolean {
+  const blob = `${name ?? ''} ${label ?? ''} ${title ?? ''}`.toLowerCase()
+  if (!blob.trim()) return false
+  if (blob.includes('todo_write') || blob.includes('todowrite')) return true
+  if (/\btodo\b/.test(blob) && /\b(write|update|list)\b/.test(blob)) return true
+  if (blob.includes('plan write') || blob.includes('write plan')) return true
+  if (label?.toLowerCase() === 'plan' && name?.toLowerCase().includes('todo'))
+    return true
+  return false
+}
+
 function stripPlanPreamble(text: string): string {
   return text.startsWith('<system-reminder>')
     ? text.replace(/^<system-reminder>[\s\S]*?<\/system-reminder>\s*/, '')

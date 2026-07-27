@@ -18,3 +18,6 @@ Thumbs.db
 
 # Local screenshots / scratch (never ship)
 issue*.png
+
+# User-pasted images written by the extension for the agent to open
+.grok-attachments/
