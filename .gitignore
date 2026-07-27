@@ -15,5 +15,6 @@ recordings/
 *.log
 .DS_Store
 Thumbs.db
-issue.png 
-issue2.png 
+
+# Local screenshots / scratch (never ship)
+issue*.png
