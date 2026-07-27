@@ -91,10 +91,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         for (const m of backlog) void this.view?.webview.postMessage(m)
         return
       }
+      case 'stageImage':
+        this.session.stageImage({
+          id: msg.id,
+          mimeType: msg.mimeType,
+          data: msg.data,
+          name: msg.name,
+        })
+        return
       case 'prompt':
-        return this.session.prompt(msg.text, msg.images)
+        return this.session.prompt(msg.text, msg.images, msg.stagedImageIds)
       case 'interject':
-        return this.session.interject(msg.text, msg.images)
+        return this.session.interject(msg.text, msg.images, msg.stagedImageIds)
       case 'clearQueue':
         return this.session.clearQueue()
       case 'pushQueue':

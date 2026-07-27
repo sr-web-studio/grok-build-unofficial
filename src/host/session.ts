@@ -47,7 +47,12 @@ import type {
   WorktreeAction,
 } from '../shared/protocol'
 import { showAgentDiff } from './diffView'
-import { FsBridge } from './fsBridge'
+import {
+  agentCloudToolHint,
+  cloudDriveHint,
+  isCloudPath,
+  FsBridge,
+} from './fsBridge'
 import { PermissionGate } from './permissions'
 import { TerminalBridge } from './terminalBridge'
 
@@ -119,6 +124,13 @@ interface WorktreeEntry {
 
 function rpcFail(code: number, message: string): Error {
   return Object.assign(new Error(message), { rpc: { code, message } })
+}
+
+/** Append agent-facing cloud recovery hint when the path/cwd is on Drive/OneDrive/etc. */
+function withCloudToolHint(filePathOrCwd: string, message: string): string {
+  if (!isCloudPath(filePathOrCwd)) return message
+  if (message.includes('CLOUD_PATH_HINT')) return message
+  return `${message}\n\n${agentCloudToolHint(filePathOrCwd)}`
 }
 
 function settings() {
@@ -197,8 +209,16 @@ export class GrokSession implements vscode.Disposable {
   private forceNext:
     | { text: string; images?: PromptImage[]; wasQueued?: boolean }
     | undefined
-  /** From initialize — grok 0.2.x advertises `image: false`; we still save files as a fallback. */
-  private promptSupportsImage = false
+  /**
+   * Images staged from the webview one-by-one (avoids giant prompt postMessages). Cleared after
+   * the next prompt/interject consumes them.
+   */
+  private readonly stagedImages = new Map<string, PromptImage>()
+  /**
+   * While true, transcript mutations stay local — session/load replays thousands of updates and
+   * streaming each one to the webview freezes the UI with scroll thrash.
+   */
+  private replayingHistory = false
   private rawRewindPoints = new Map<string, Record<string, unknown>>()
   private worktreeNotice: NoticeBlock | undefined
   private readonly knownSessions = new Map<string, SessionSummary>()
@@ -276,7 +296,28 @@ export class GrokSession implements vscode.Disposable {
   }
 
   private pushStatus(): void {
+    // Status is allowed during replay so the loading spinner can stay honest.
     this.deps.post({ type: 'status', status: this.status })
+  }
+
+  private beginHistoryReplay(): void {
+    // Clear the webview first (replaying mute would suppress the clear post).
+    this.replayingHistory = false
+    this.clearTranscript()
+    this.replayingHistory = true
+    this.status.loadingHistory = true
+    this.status.planEntries = undefined
+    this.status.agentState = 'starting'
+    this.pushStatus()
+  }
+
+  private endHistoryReplay(): void {
+    this.replayingHistory = false
+    this.status.loadingHistory = false
+    this.closeStreams()
+    // One full snapshot replaces the muted stream of blockAdd/patch during load.
+    this.deps.post({ type: 'state', state: this.getState() })
+    this.pushStatus()
   }
 
   async ensureStarted(): Promise<void> {
@@ -335,9 +376,6 @@ export class GrokSession implements vscode.Disposable {
       this.status.agentVersion = init._meta?.agentVersion
       if (init._meta?.availableCommands)
         this.status.availableCommands = init._meta.availableCommands
-      this.promptSupportsImage = Boolean(
-        init.agentCapabilities?.promptCapabilities?.image,
-      )
       // Seed model/effort menus before session/load — load does not always populate `models`,
       // which left the UI stuck on "loading…" after resume.
       this.seedModelsFromInit(init)
@@ -382,6 +420,8 @@ export class GrokSession implements vscode.Disposable {
     this.deps.log(
       `session ready: ${this.sessionId} (grok ${this.status.agentVersion ?? '?'})`,
     )
+    const driveHint = cloudDriveHint(this.deps.cwd)
+    if (driveHint) this.addNotice('info', driveHint)
   }
 
   private applySessionResponse(session: NewSessionResponse): void {
@@ -430,8 +470,7 @@ export class GrokSession implements vscode.Disposable {
     }
     for (const sessionId of candidates) {
       try {
-        this.clearTranscript()
-        this.status.planEntries = undefined
+        this.beginHistoryReplay()
         // load can return the same shape as session/new (models + meta) — apply if present.
         const loaded = await client.request<NewSessionResponse>(
           'session/load',
@@ -465,12 +504,15 @@ export class GrokSession implements vscode.Disposable {
               ? disk.title
               : (this.status.sessionTitle ?? known?.title)
         this.rememberSession(this.sessionId ?? sessionId)
-        this.closeStreams()
-        this.deps.log(`resumed session ${this.sessionId ?? sessionId}`)
-        this.pushStatus()
+        this.deps.log(
+          `resumed session ${this.sessionId ?? sessionId} (${this.blocks.length} blocks)`,
+        )
+        this.endHistoryReplay()
         return true
       } catch (err) {
         this.deps.log(`resume ${sessionId} failed: ${(err as Error).message}`)
+        this.replayingHistory = false
+        this.status.loadingHistory = false
         this.clearTranscript()
       }
     }
@@ -617,30 +659,38 @@ export class GrokSession implements vscode.Disposable {
     if (block.promptIndex === undefined)
       block.promptIndex = this.currentPromptIndex
     this.blocks.splice(insertionIndex(this.blocks, anchorId), 0, block)
-    this.deps.post({ type: 'blockAdd', block, anchorId })
+    if (!this.replayingHistory) {
+      this.deps.post({ type: 'blockAdd', block, anchorId })
+    }
     return block
   }
 
   private patch(block: TranscriptBlock, patch: Record<string, unknown>): void {
     Object.assign(block, patch)
-    this.deps.post({ type: 'blockPatch', id: block.id, patch })
+    if (!this.replayingHistory) {
+      this.deps.post({ type: 'blockPatch', id: block.id, patch })
+    }
   }
 
   private removeBlock(id: string): void {
     const index = this.blocks.findIndex((b) => b.id === id)
     if (index < 0) return
     this.blocks.splice(index, 1)
-    this.deps.post({ type: 'blockRemove', id })
+    if (!this.replayingHistory) {
+      this.deps.post({ type: 'blockRemove', id })
+    }
   }
 
   private appendText(block: TextBlock | ThinkingBlock, text: string): void {
     block.text += text
-    this.deps.post({
-      type: 'blockPatch',
-      id: block.id,
-      patch: {},
-      appendText: text,
-    })
+    if (!this.replayingHistory) {
+      this.deps.post({
+        type: 'blockPatch',
+        id: block.id,
+        patch: {},
+        appendText: text,
+      })
+    }
   }
 
   private addNotice(level: 'info' | 'warn' | 'error', text: string): void {
@@ -660,7 +710,9 @@ export class GrokSession implements vscode.Disposable {
     this.openText = undefined
     this.openThinking = undefined
     this.currentPromptIndex = undefined
-    this.deps.post({ type: 'clear' })
+    if (!this.replayingHistory) {
+      this.deps.post({ type: 'clear' })
+    }
   }
 
   private closeStreams(): void {
@@ -679,21 +731,67 @@ export class GrokSession implements vscode.Disposable {
 
   // ------------------------------------------------------------------ prompting
 
-  async prompt(text: string, images?: PromptImage[]): Promise<void> {
+  /** Receive one compressed image from the webview before the prompt that references it. */
+  stageImage(img: PromptImage): void {
+    if (!img.id || !img.data) return
+    this.stagedImages.set(img.id, {
+      id: img.id,
+      mimeType: img.mimeType || 'image/jpeg',
+      data: img.data,
+      name: img.name,
+    })
+    this.deps.log(
+      `staged image ${img.id} (${img.mimeType || '?'}, ${img.data.length} b64 chars)`,
+    )
+  }
+
+  private takeStagedImages(
+    images?: PromptImage[],
+    stagedImageIds?: string[],
+  ): PromptImage[] | undefined {
+    const out: PromptImage[] = []
+    if (images?.length) out.push(...images)
+    for (const id of stagedImageIds ?? []) {
+      const img = this.stagedImages.get(id)
+      if (img) {
+        out.push(img)
+        this.stagedImages.delete(id)
+      } else {
+        this.deps.log(`staged image missing: ${id}`)
+      }
+    }
+    return out.length ? out : undefined
+  }
+
+  async prompt(
+    text: string,
+    images?: PromptImage[],
+    stagedImageIds?: string[],
+  ): Promise<void> {
     const trimmed = text.trim()
-    const imgs = images?.length ? images : undefined
-    if (!trimmed && !imgs?.length) return
+    const imgs = this.takeStagedImages(images, stagedImageIds)
+    if (!trimmed && !imgs?.length) {
+      this.addNotice('warn', 'Nothing to send (empty message and no images).')
+      return
+    }
     try {
       await this.ensureStarted()
     } catch {
       return // start() already reported the failure in the transcript
     }
     if (this.turnActive) {
-      // Matches the CLI: typing during a turn interjects rather than being dropped.
+      // Staged ids were already resolved into `imgs` — don't re-take them.
       this.interject(trimmed, imgs)
       return
     }
     const saved = await this.materializeImages(imgs)
+    // Don't keep multi-MB base64 on the transcript after save — thumbs use a short data URL
+    // only when still needed; path is enough for the agent note.
+    const forUi = saved?.map((s) => ({
+      ...s,
+      // Keep a tiny preview for the bubble if data is still present and small.
+      data: s.data && s.data.length < 80_000 ? s.data : '',
+    }))
     this.addBlock<TextBlock>({
       id: this.nextId('user'),
       ts: Date.now(),
@@ -701,9 +799,12 @@ export class GrokSession implements vscode.Disposable {
       role: 'user',
       text: trimmed || (saved?.length ? '(image attachment)' : ''),
       streaming: false,
-      images: saved,
+      images: forUi,
     })
-    await this.runTurn(trimmed, saved)
+    await this.runTurn(
+      trimmed || 'Please look at the attached image(s).',
+      saved,
+    )
   }
 
   private async runTurn(text: string, images?: PromptImage[]): Promise<void> {
@@ -716,11 +817,7 @@ export class GrokSession implements vscode.Disposable {
     this.status.agentState = 'thinking'
     this.pushStatus()
     try {
-      const prompt = await this.buildPromptBlocks(text, images)
-      const res = await client.request<PromptResponse>('session/prompt', {
-        sessionId: this.sessionId,
-        prompt,
-      })
+      const res = await this.promptWithImageFallback(text, images)
       this.closeStreams()
       if (res.stopReason && res.stopReason !== 'end_turn') {
         this.addNotice('info', `Turn ended: ${res.stopReason}`)
@@ -748,28 +845,72 @@ export class GrokSession implements vscode.Disposable {
       this.gate.getMode() === 'plan' ? `${PLAN_MODE_PREAMBLE}\n\n${text}` : text
     const blocks: ContentBlock[] = []
     const pathNotes: string[] = []
+    // Always include path notes so the agent can open files on disk even when ACP image
+    // content blocks are rejected. Also try native image blocks when the CLI advertises them
+    // (and when it does not — some builds still accept the block).
     for (const img of images ?? []) {
-      if (this.promptSupportsImage && img.data) {
+      if (img.data) {
         blocks.push({
           type: 'image',
-          mimeType: img.mimeType,
+          mimeType: img.mimeType || 'image/png',
           data: img.data,
         })
-      } else if (img.path) {
-        pathNotes.push(img.path)
       }
+      if (img.path) pathNotes.push(img.path)
     }
-    let textOut = body
+    let textOut = body.trim()
     if (pathNotes.length) {
       const note =
         pathNotes.length === 1
-          ? `\n\n[Attached image saved at: ${pathNotes[0]} — open/read this file to inspect the screenshot. ACP image prompts are not enabled by this Grok CLI build.]`
-          : `\n\n[Attached images saved at:\n${pathNotes.map((p) => `- ${p}`).join('\n')}\nOpen/read these files to inspect the screenshots. ACP image prompts are not enabled by this Grok CLI build.]`
+          ? `\n\n[User attached an image. Saved at: ${pathNotes[0]}\nUse the Read tool on that path, or open it. If Read says "binary", the host will still return a description + base64 for images.]`
+          : `\n\n[User attached ${pathNotes.length} images:\n${pathNotes.map((p) => `- ${p}`).join('\n')}\nRead those paths if you need the pixels.]`
       textOut = (textOut || 'Please look at the attached image(s).') + note
+    } else if (!textOut && (images?.length ?? 0) > 0) {
+      textOut = 'Please look at the attached image(s).'
     }
     if (textOut) blocks.unshift({ type: 'text', text: textOut })
     if (blocks.length === 0) blocks.push({ type: 'text', text: text || '' })
     return blocks
+  }
+
+  /**
+   * Prefer image content blocks; if the agent rejects them (capability false / size), retry
+   * with path-note text only so the turn still lands.
+   */
+  private async promptWithImageFallback(
+    text: string,
+    images: PromptImage[] | undefined,
+  ): Promise<PromptResponse> {
+    const client = this.client
+    if (!client || !this.sessionId) {
+      throw new Error('no session')
+    }
+    const full = await this.buildPromptBlocks(text, images)
+    try {
+      return await client.request<PromptResponse>('session/prompt', {
+        sessionId: this.sessionId,
+        prompt: full,
+      })
+    } catch (err) {
+      const hasImages = full.some((b) => b.type === 'image')
+      if (!hasImages) throw err
+      this.deps.log(
+        `session/prompt with image blocks failed (${(err as Error).message}); retrying text+paths only`,
+      )
+      const textOnly = full.filter((b) => b.type !== 'image')
+      if (textOnly.length === 0) {
+        textOnly.push({
+          type: 'text',
+          text:
+            text.trim() ||
+            'Please look at the attached image(s) (paths in the previous note).',
+        })
+      }
+      return await client.request<PromptResponse>('session/prompt', {
+        sessionId: this.sessionId,
+        prompt: textOnly,
+      })
+    }
   }
 
   /**
@@ -814,9 +955,13 @@ export class GrokSession implements vscode.Disposable {
    * lost, it just lands one turn later than in the CLI. Use `pushQueue` to force-send early
    * (cancels the current turn first).
    */
-  interject(text: string, images?: PromptImage[]): void {
+  interject(
+    text: string,
+    images?: PromptImage[],
+    stagedImageIds?: string[],
+  ): void {
     const trimmed = text.trim()
-    const imgs = images?.length ? images : undefined
+    const imgs = this.takeStagedImages(images, stagedImageIds)
     if (!trimmed && !imgs?.length) return
     if (!this.turnActive) {
       void this.prompt(trimmed, imgs)
@@ -1108,8 +1253,19 @@ export class GrokSession implements vscode.Disposable {
     rawParams: unknown,
   ): Promise<unknown> {
     switch (method) {
-      case 'fs/read_text_file':
-        return this.fs.readTextFile(rawParams as ReadTextFileParams)
+      case 'fs/read_text_file': {
+        const p = rawParams as ReadTextFileParams
+        try {
+          return await this.fs.readTextFile(p)
+        } catch (err) {
+          // Soft tool error for the agent — includes CLOUD_PATH_HINT when relevant so it can
+          // change strategy instead of hard-looping the same Read.
+          throw rpcFail(
+            -32000,
+            withCloudToolHint(p.path, (err as Error).message),
+          )
+        }
+      }
 
       case 'fs/write_text_file':
         return this.onWriteRequest(rawParams as WriteTextFileParams)
@@ -1156,7 +1312,9 @@ export class GrokSession implements vscode.Disposable {
 
   private async onWriteRequest(params: WriteTextFileParams): Promise<null> {
     const verdict = this.gate.checkWrite(params.path)
-    if (verdict.action === 'deny') throw rpcFail(-32000, verdict.reason)
+    if (verdict.action === 'deny') {
+      throw rpcFail(-32000, withCloudToolHint(params.path, verdict.reason))
+    }
 
     if (verdict.action === 'ask') {
       const oldText = await this.fs.currentContent(params.path)
@@ -1179,15 +1337,26 @@ export class GrokSession implements vscode.Disposable {
         )
       }
     }
-    return this.fs.writeTextFile(params)
+    try {
+      return await this.fs.writeTextFile(params)
+    } catch (err) {
+      // Soft failure message for the agent — includes CLOUD_PATH_HINT when relevant.
+      throw rpcFail(
+        -32000,
+        withCloudToolHint(params.path, (err as Error).message),
+      )
+    }
   }
 
   private async onTerminalCreate(
     params: CreateTerminalParams,
   ): Promise<{ terminalId: string }> {
     const commandLine = [params.command, ...(params.args ?? [])].join(' ')
+    const cwd = params.cwd ?? this.deps.cwd
     const verdict = this.gate.checkCommand(commandLine)
-    if (verdict.action === 'deny') throw rpcFail(-32000, verdict.reason)
+    if (verdict.action === 'deny') {
+      throw rpcFail(-32000, withCloudToolHint(cwd, verdict.reason))
+    }
 
     if (verdict.action === 'ask') {
       const decision = await this.askApproval({
@@ -1195,7 +1364,7 @@ export class GrokSession implements vscode.Disposable {
         kind: 'command',
         title: 'Run command',
         command: commandLine,
-        cwd: params.cwd ?? this.deps.cwd,
+        cwd,
         toolCallId: this.lastExecuteBlockId
           ? this.toolCallIdOfBlock(this.lastExecuteBlockId)
           : undefined,
@@ -1889,11 +2058,9 @@ export class GrokSession implements vscode.Disposable {
       return
     }
     if (!this.client) return
-    this.clearTranscript()
-    this.status.agentState = 'starting'
-    this.pushStatus()
+    this.beginHistoryReplay()
     try {
-      // session/load replays the whole update stream, which rebuilds the transcript for free.
+      // session/load replays the whole update stream into host memory; UI gets one flush after.
       await this.client.request('session/load', {
         sessionId,
         cwd: this.deps.cwd,
@@ -1905,15 +2072,17 @@ export class GrokSession implements vscode.Disposable {
       // A resumed session already has history, so `+` must open a genuinely new one after this.
       this.sessionUsed = true
       this.rememberSession(sessionId)
-      this.closeStreams()
     } catch (err) {
+      this.replayingHistory = false
+      this.status.loadingHistory = false
       this.addNotice(
         'error',
         `Could not load session: ${(err as Error).message}`,
       )
     } finally {
       this.status.agentState = this.client?.running ? 'idle' : 'stopped'
-      this.pushStatus()
+      if (this.replayingHistory) this.endHistoryReplay()
+      else this.pushStatus()
     }
   }
 

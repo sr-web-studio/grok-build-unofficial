@@ -6,6 +6,7 @@
     QueuedMessage,
     UiStatus,
   } from '../../src/shared/protocol';
+  import { send } from '../ipc';
   import Icon from './Icon.svelte';
 
   interface Props {
@@ -14,7 +15,6 @@
     commands: AvailableCommand[];
     queuedMessages: QueuedMessage[];
     focusSignal: number;
-    onSend: (text: string, images?: PromptImage[]) => void;
     onCancel: () => void;
     onClearQueue: () => void;
     onPushQueue: (id?: string) => void;
@@ -30,7 +30,6 @@
     commands,
     queuedMessages,
     focusSignal,
-    onSend,
     onCancel,
     onClearQueue,
     onPushQueue,
@@ -49,11 +48,15 @@
   let fileInput = $state<HTMLInputElement | null>(null);
   let picked = $state(0);
   let attachments = $state<PromptImage[]>([]);
+  let sending = $state(false);
+  let sendError = $state<string | null>(null);
 
   const agentState = $derived(status.agentState);
   const busy = $derived(agentState === 'thinking' || agentState === 'awaitingApproval');
   const stopped = $derived(agentState === 'stopped');
-  const canSubmit = $derived(Boolean(text.trim() || attachments.length));
+  const canSubmit = $derived(
+    !sending && Boolean(text.trim() || attachments.length),
+  );
   const queuedCount = $derived(queuedMessages.length);
 
   const modes: {
@@ -131,16 +134,48 @@
     if (input) autogrow(input);
   }
 
-  function submit() {
+  async function submit() {
+    if (sending) return;
     const value = text.trim();
     if (!value && attachments.length === 0) return;
-    const imgs = attachments.length ? [...attachments] : undefined;
-    onSend(value, imgs);
-    text = '';
-    attachments = [];
-    if (input) {
-      autogrow(input);
-      input.focus();
+    sendError = null;
+    sending = true;
+    const snapshot = [...attachments];
+    const promptText = value || (snapshot.length ? 'Please look at the attached image(s).' : '');
+    try {
+      // Stage each image as its own message — one big prompt+base64 postMessage is dropped
+      // silently by VS Code when the payload is large.
+      const stagedIds: string[] = [];
+      for (const img of snapshot) {
+        const id = img.id || `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        send({
+          type: 'stageImage',
+          id,
+          mimeType: img.mimeType || 'image/jpeg',
+          data: img.data,
+          name: img.name,
+        });
+        stagedIds.push(id);
+      }
+      send({
+        type: 'prompt',
+        text: promptText,
+        stagedImageIds: stagedIds.length ? stagedIds : undefined,
+      });
+      text = '';
+      attachments = [];
+      if (input) {
+        autogrow(input);
+        input.focus();
+      }
+    } catch (err) {
+      sendError =
+        err instanceof Error
+          ? err.message
+          : 'Could not send (image may be too large). Try a smaller screenshot.';
+      // Keep attachments so the user can retry.
+    } finally {
+      sending = false;
     }
   }
 
@@ -179,16 +214,31 @@
     const list = [...files].filter((f) => f.type.startsWith('image/'));
     for (const file of list) {
       if (attachments.length >= MAX_IMAGES) break;
-      const data = await readAsBase64(file);
-      attachments = [
-        ...attachments,
-        {
-          id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          mimeType: file.type || 'image/png',
-          data,
-          name: file.name,
-        },
-      ];
+      try {
+        // Compress before postMessage — large base64 payloads can silently fail IPC.
+        const prepared = await prepareImage(file);
+        attachments = [
+          ...attachments,
+          {
+            id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            mimeType: prepared.mimeType,
+            data: prepared.data,
+            name: file.name || prepared.name,
+          },
+        ];
+      } catch {
+        // Fall back to raw read if canvas compress fails (e.g. SVG).
+        const data = await readAsBase64(file);
+        attachments = [
+          ...attachments,
+          {
+            id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            mimeType: file.type || 'image/png',
+            data,
+            name: file.name,
+          },
+        ];
+      }
     }
   }
 
@@ -202,6 +252,54 @@
       };
       reader.onerror = () => reject(reader.error ?? new Error('read failed'));
       reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Downscale large screenshots so host↔webview messages stay under VS Code IPC limits
+   * and the agent can still see the picture.
+   */
+  function prepareImage(file: File): Promise<{ data: string; mimeType: string; name: string }> {
+    const MAX_EDGE = 1280;
+    const JPEG_QUALITY = 0.72;
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+          width = Math.max(1, Math.round(width * scale));
+          height = Math.max(1, Math.round(height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('no canvas'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          // Always JPEG after resize — screenshots as PNG explode IPC size.
+          const mimeType = 'image/jpeg';
+          const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+          const comma = dataUrl.indexOf(',');
+          resolve({
+            data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl,
+            mimeType,
+            name: file.name || 'paste.jpg',
+          });
+        } catch (err) {
+          reject(err);
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('image load failed'));
+      };
+      img.src = url;
     });
   }
 
@@ -309,6 +407,10 @@
     ></textarea>
   </div>
 
+  {#if sendError}
+    <div class="send-error" role="alert">{sendError}</div>
+  {/if}
+
   <div class="toolbar" class:warn={mode.tone === 'warn'} class:danger={mode.tone === 'danger'}>
     <input
       bind:this={fileInput}
@@ -377,8 +479,8 @@
     {#if busy}
       <button class="stop" type="button" onclick={onCancel} title="Stop the current turn (Esc)">Stop</button>
     {/if}
-    <button class="send" type="button" onclick={submit} disabled={!canSubmit}>
-      {busy ? 'Queue' : stopped ? 'Start' : 'Send'}
+    <button class="send" type="button" onclick={() => void submit()} disabled={!canSubmit}>
+      {sending ? 'Sending…' : busy ? 'Queue' : stopped ? 'Start' : 'Send'}
     </button>
   </div>
 </div>
@@ -596,6 +698,14 @@
 
   textarea:focus {
     outline: none;
+  }
+
+  .send-error {
+    padding: 5px 8px;
+    border-left: 3px solid var(--gb-danger);
+    background: color-mix(in srgb, var(--gb-danger) 12%, transparent);
+    color: var(--gb-danger);
+    font-size: 11px;
   }
 
   .file {

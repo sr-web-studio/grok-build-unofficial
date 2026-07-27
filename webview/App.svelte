@@ -4,7 +4,6 @@
     ApprovalDecision,
     HostMessage,
     PermissionMode,
-    PromptImage,
     QuestionResponse,
     RewindPoint,
     SessionSummary,
@@ -149,10 +148,6 @@
       }
     }
     revision += 1;
-  }
-
-  function onSend(text: string, images?: PromptImage[]): void {
-    send({ type: 'prompt', text, images });
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -496,6 +491,7 @@
       cwd={status.cwd}
       {revision}
       agentState={status.agentState}
+      loadingHistory={status.loadingHistory}
       bind:jumpVisible
       onJumpReady={(api) => {
         scrollTranscriptToBottom = api.scrollToBottom;
@@ -533,7 +529,6 @@
     commands={status.availableCommands}
     queuedMessages={status.queuedMessages ?? []}
     {focusSignal}
-    {onSend}
     onCancel={() => send({ type: 'cancel' })}
     onClearQueue={() => send({ type: 'clearQueue' })}
     onPushQueue={(id) => send({ type: 'pushQueue', blockId: id })}

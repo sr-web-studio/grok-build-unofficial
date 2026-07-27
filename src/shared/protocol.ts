@@ -278,6 +278,11 @@ export interface UiStatus {
    * composer, not as a transcript card.
    */
   planEntries?: PlanEntry[]
+  /**
+   * True while session/load is replaying history. UI should show a loading shell and skip
+   * auto-scroll thrash until a single full state flush arrives.
+   */
+  loadingHistory?: boolean
   error?: string
 }
 
@@ -346,8 +351,29 @@ export type HostMessage =
 
 export type WebviewMessage =
   | { type: 'ready' }
-  | { type: 'prompt'; text: string; images?: PromptImage[] }
-  | { type: 'interject'; text: string; images?: PromptImage[] }
+  /**
+   * Upload one image before prompt. Prefer this over inlining base64 on `prompt` — large
+   * postMessage payloads are dropped silently by VS Code.
+   */
+  | {
+      type: 'stageImage'
+      id: string
+      mimeType: string
+      data: string
+      name?: string
+    }
+  | {
+      type: 'prompt'
+      text: string
+      images?: PromptImage[]
+      stagedImageIds?: string[]
+    }
+  | {
+      type: 'interject'
+      text: string
+      images?: PromptImage[]
+      stagedImageIds?: string[]
+    }
   | { type: 'clearQueue' }
   /**
    * Force the queue into Grok now. Stops the current turn (if any), then sends either every

@@ -23,6 +23,8 @@
     revision: number;
     /** When `thinking`, show a live "still working" cue between sparse tool bursts. */
     agentState: AgentState;
+    /** Host is replaying a long session — show a shell, no scroll thrash. */
+    loadingHistory?: boolean;
     /** Bound by App so the chat-layer Latest button can sit above Plan / other overlays. */
     jumpVisible?: boolean;
     onJumpReady?: (api: { scrollToBottom: () => void }) => void;
@@ -41,6 +43,7 @@
     cwd,
     revision,
     agentState,
+    loadingHistory = false,
     jumpVisible = $bindable(false),
     onJumpReady,
     onApprove,
@@ -55,11 +58,11 @@
   let stuck = $state(true);
   /** Wall-clock seconds the current turn has been open (for the working line). */
   let busySeconds = $state(0);
-  /** Last user prompt scrolled out of view — pin a compact bar at the top (Claude Code-style). */
-  let stickyLastUser = $state(false);
+  /** Which user message is currently pinned (scroll-aware — not only the chronologically last). */
+  let stickyUserId = $state<string | null>(null);
   /** Expanded long user messages by block id. */
   let expandedUsers = $state<Record<string, boolean>>({});
-  /** Sticky bar's own expand toggle when the last message is long. */
+  /** Sticky bar's own expand toggle when the pinned message is long. */
   let stickyExpanded = $state(false);
 
   /** Collapse long user text in-chat and in the sticky bar (≈3 lines / 160 chars). */
@@ -114,12 +117,11 @@
     return out;
   });
 
-  const lastUserBlock = $derived.by(() => {
-    for (let i = visible.length - 1; i >= 0; i--) {
-      const b = visible[i];
-      if (b.kind === 'text' && b.role === 'user') return b;
-    }
-    return undefined;
+  /** Pinned user bubble — updates as you scroll past earlier turns (Claude Code-style). */
+  const stickyUserBlock = $derived.by(() => {
+    if (!stickyUserId) return undefined;
+    const b = visible.find((x) => x.kind === 'text' && x.role === 'user' && x.id === stickyUserId);
+    return b?.kind === 'text' ? b : undefined;
   });
 
   function onScroll() {
@@ -128,27 +130,28 @@
     stuck = slack < 48;
     jumpVisible = !stuck && visible.length > 0;
 
-    // Pin last user prompt once its row leaves the top — overlay only (no layout reflow).
-    const last = lastUserBlock;
-    if (!last) {
-      stickyLastUser = false;
-      return;
-    }
-    const el = scroller.querySelector(`[data-user-id="${CSS.escape(last.id)}"]`) as HTMLElement | null;
-    if (!el) {
-      stickyLastUser = false;
-      return;
-    }
+    // Among every user row, pick the last one that has fully scrolled above the top edge.
+    // Scrolling further up promotes earlier messages into the sticky bar.
     const sRect = scroller.getBoundingClientRect();
-    const eRect = el.getBoundingClientRect();
-    stickyLastUser = eRect.bottom < sRect.top + 4;
+    const nodes = scroller.querySelectorAll<HTMLElement>('[data-user-id]');
+    let pinned: string | null = null;
+    for (const el of nodes) {
+      const id = el.getAttribute('data-user-id');
+      if (!id) continue;
+      const eRect = el.getBoundingClientRect();
+      if (eRect.bottom < sRect.top + 4) pinned = id;
+    }
+    if (pinned !== stickyUserId) {
+      stickyUserId = pinned;
+      stickyExpanded = false;
+    }
   }
 
   function scrollToBottom() {
     if (!scroller) return;
     scroller.scrollTop = scroller.scrollHeight;
     stuck = true;
-    stickyLastUser = false;
+    stickyUserId = null;
     jumpVisible = false;
   }
 
@@ -156,18 +159,26 @@
     onJumpReady?.({ scrollToBottom });
   });
 
-  function scrollToLastUser() {
-    if (!scroller || !lastUserBlock) return;
+  function scrollToStickyUser() {
+    if (!scroller || !stickyUserId) return;
     const el = scroller.querySelector(
-      `[data-user-id="${CSS.escape(lastUserBlock.id)}"]`,
+      `[data-user-id="${CSS.escape(stickyUserId)}"]`,
     ) as HTMLElement | null;
     el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 
   $effect(() => {
     revision;
-    if (stuck && scroller) scroller.scrollTop = scroller.scrollHeight;
-    // Re-evaluate sticky after stream updates move layout.
+    // During history load the host mutes per-block posts and flushes once — still, never
+    // auto-scroll while starting/loading or the view thrashingly jumps for 15s.
+    if (
+      stuck &&
+      scroller &&
+      agentState !== 'starting' &&
+      !statusLoading
+    ) {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
     queueMicrotask(() => onScroll());
   });
 
@@ -186,6 +197,7 @@
   }
 
   const busy = $derived(agentState === 'thinking');
+  const statusLoading = $derived(Boolean(loadingHistory) || agentState === 'starting');
 
   /** What the sparse gap is most likely doing, based on the last open block. */
   const workingHint = $derived.by(() => {
@@ -233,23 +245,33 @@
 </script>
 
 <div class="wrap">
+  {#if statusLoading}
+    <div class="loading-shell" aria-busy="true" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      <div class="loading-copy">
+        <strong>Loading session…</strong>
+        <span>Rebuilding the transcript — this can take a few seconds for long chats.</span>
+      </div>
+    </div>
+  {/if}
+
   <!-- Overlay (absolute): must not take flex space or the scroller jumps when it appears. -->
-  {#if stickyLastUser && lastUserBlock}
-    <div class="sticky-user" class:was-queued={lastUserBlock.wasQueued}>
-      <button class="sticky-main" type="button" title="Jump to this message" onclick={scrollToLastUser}>
+  {#if stickyUserBlock && !statusLoading}
+    <div class="sticky-user" class:was-queued={stickyUserBlock.wasQueued}>
+      <button class="sticky-main" type="button" title="Jump to this message" onclick={scrollToStickyUser}>
         <span class="role gb-kicker">You</span>
-        {#if lastUserBlock.wasQueued}
+        {#if stickyUserBlock.wasQueued}
           <span class="queue-pill">queued</span>
         {/if}
         <span class="sticky-text">
-          {#if isLong(lastUserBlock.text) && !stickyExpanded}
-            {previewText(lastUserBlock.text)}
+          {#if isLong(stickyUserBlock.text) && !stickyExpanded}
+            {previewText(stickyUserBlock.text)}
           {:else}
-            {lastUserBlock.text}
+            {stickyUserBlock.text}
           {/if}
         </span>
       </button>
-      {#if isLong(lastUserBlock.text)}
+      {#if isLong(stickyUserBlock.text)}
         <button
           class="sticky-expand"
           type="button"
@@ -261,8 +283,8 @@
     </div>
   {/if}
 
-  <div class="scroller" bind:this={scroller} onscroll={onScroll}>
-    {#if visible.length === 0}
+  <div class="scroller" class:dimmed={statusLoading} bind:this={scroller} onscroll={onScroll}>
+    {#if visible.length === 0 && !statusLoading}
       <div class="empty">
         <p>Ask Grok to do something in this workspace.</p>
         <p class="dim">
@@ -392,6 +414,53 @@
     flex-direction: column;
   }
 
+  .loading-shell {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    background: color-mix(
+      in srgb,
+      var(--vscode-sideBar-background, var(--vscode-editor-background)) 92%,
+      transparent
+    );
+    text-align: center;
+  }
+
+  .loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 2.5px solid color-mix(in srgb, var(--gb-accent) 30%, transparent);
+    border-top-color: var(--gb-accent);
+    border-radius: 50%;
+    animation: load-spin 0.7s linear infinite;
+  }
+
+  @keyframes load-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .loading-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 22em;
+    font-size: 0.92em;
+    color: var(--gb-dim);
+  }
+
+  .loading-copy strong {
+    color: var(--vscode-foreground);
+    font-size: 1.05em;
+  }
+
   .scroller {
     flex: 1 1 auto;
     overflow-y: auto;
@@ -400,6 +469,12 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+
+  .scroller.dimmed {
+    opacity: 0.25;
+    pointer-events: none;
+    overflow: hidden;
   }
 
   .working {
