@@ -51,6 +51,7 @@ import {
   agentCloudToolHint,
   cloudDriveHint,
   isCloudPath,
+  pathKey,
   FsBridge,
 } from './fsBridge'
 import { PermissionGate } from './permissions'
@@ -180,6 +181,14 @@ export class GrokSession implements vscode.Disposable {
   private currentPromptIndex: number | undefined
 
   private readonly toolBlocks = new Map<string, ToolBlock>()
+  /**
+   * Early `tool_call_delta_chunk` seeds held briefly so the card can paint once with
+   * name+args (tool_call) instead of morphing SEARCH → SEARCH query → multiline.
+   */
+  private readonly toolHolds = new Map<
+    string,
+    { name?: string; timer?: ReturnType<typeof setTimeout> }
+  >()
   private readonly terminalToBlock = new Map<string, string>()
   private lastExecuteBlockId: string | undefined
   private lastMutatingToolCallId: string | undefined
@@ -219,6 +228,11 @@ export class GrokSession implements vscode.Disposable {
    * streaming each one to the webview freezes the UI with scroll thrash.
    */
   private replayingHistory = false
+  /**
+   * Paths successfully read via `fs/read_text_file` this session. Existing files must be read
+   * before write (Claude-style) — also hydrates Google Drive placeholders before edit.
+   */
+  private readonly readPaths = new Set<string>()
   private rawRewindPoints = new Map<string, Record<string, unknown>>()
   private worktreeNotice: NoticeBlock | undefined
   private readonly knownSessions = new Map<string, SessionSummary>()
@@ -304,6 +318,7 @@ export class GrokSession implements vscode.Disposable {
     // Clear the webview first (replaying mute would suppress the clear post).
     this.replayingHistory = false
     this.clearTranscript()
+    this.readPaths.clear()
     this.replayingHistory = true
     this.status.loadingHistory = true
     this.status.planEntries = undefined
@@ -681,15 +696,71 @@ export class GrokSession implements vscode.Disposable {
     }
   }
 
+  /**
+   * Coalesce stream tokens (~1 frame) before postMessage. Grok emits word/fragment chunks;
+   * painting each one re-parses Markdown and feels like pixel crawl. Host memory still gets
+   * every token immediately — only the webview is batched (same approach as other editor chats).
+   */
+  private readonly streamPending = new Map<string, string>()
+  private streamFlushTimer: ReturnType<typeof setTimeout> | undefined
+  private static readonly STREAM_FLUSH_MS = 32
+
   private appendText(block: TextBlock | ThinkingBlock, text: string): void {
     block.text += text
-    if (!this.replayingHistory) {
-      this.deps.post({
-        type: 'blockPatch',
-        id: block.id,
-        patch: {},
-        appendText: text,
-      })
+    if (this.replayingHistory) return
+    const prev = this.streamPending.get(block.id) ?? ''
+    this.streamPending.set(block.id, prev + text)
+    if (this.streamFlushTimer === undefined) {
+      this.streamFlushTimer = setTimeout(
+        () => this.flushStreamPending(),
+        GrokSession.STREAM_FLUSH_MS,
+      )
+    }
+  }
+
+  private flushStreamPending(): void {
+    if (this.streamFlushTimer !== undefined) {
+      clearTimeout(this.streamFlushTimer)
+      this.streamFlushTimer = undefined
+    }
+    if (this.streamPending.size === 0) return
+    for (const [key, chunk] of this.streamPending) {
+      if (!chunk) continue
+      if (key.startsWith('out:')) {
+        this.deps.post({
+          type: 'blockPatch',
+          id: key.slice(4),
+          patch: {},
+          appendOutput: chunk,
+        })
+      } else {
+        this.deps.post({
+          type: 'blockPatch',
+          id: key,
+          patch: {},
+          appendText: chunk,
+        })
+      }
+    }
+    this.streamPending.clear()
+  }
+
+  private onTerminalOutput(terminalId: string, chunk: string): void {
+    const blockId = this.terminalToBlock.get(terminalId)
+    if (!blockId) return
+    const block = this.blocks.find((b) => b.id === blockId)
+    if (!block || block.kind !== 'tool') return
+    block.liveOutput = (block.liveOutput ?? '') + chunk
+    // Reuse the text-stream coalesce map under a side key so terminal spam does not
+    // postMessage every few bytes either.
+    const key = `out:${blockId}`
+    const prev = this.streamPending.get(key) ?? ''
+    this.streamPending.set(key, prev + chunk)
+    if (this.streamFlushTimer === undefined) {
+      this.streamFlushTimer = setTimeout(
+        () => this.flushStreamPending(),
+        GrokSession.STREAM_FLUSH_MS,
+      )
     }
   }
 
@@ -706,6 +777,7 @@ export class GrokSession implements vscode.Disposable {
   private clearTranscript(): void {
     this.blocks = []
     this.toolBlocks.clear()
+    this.clearAllToolHolds()
     this.terminalToBlock.clear()
     this.openText = undefined
     this.openThinking = undefined
@@ -716,6 +788,9 @@ export class GrokSession implements vscode.Disposable {
   }
 
   private closeStreams(): void {
+    // Push any coalesced tokens before we mark the block closed, or the last ~32ms of text
+    // would land after streaming:false and briefly re-open incomplete-markdown mode.
+    this.flushStreamPending()
     if (this.openText) {
       this.patch(this.openText, { streaming: false })
       this.openText = undefined
@@ -738,6 +813,7 @@ export class GrokSession implements vscode.Disposable {
       id: img.id,
       mimeType: img.mimeType || 'image/jpeg',
       data: img.data,
+      preview: img.preview,
       name: img.name,
     })
     this.deps.log(
@@ -785,12 +861,15 @@ export class GrokSession implements vscode.Disposable {
       return
     }
     const saved = await this.materializeImages(imgs)
-    // Don't keep multi-MB base64 on the transcript after save — thumbs use a short data URL
-    // only when still needed; path is enough for the agent note.
+    // Transcript UI must not depend on full-size base64 (stripped after stage). Keep only a
+    // tiny `preview` (+ path for panel→webviewUri). Full `data` stays on `saved` for the agent.
     const forUi = saved?.map((s) => ({
-      ...s,
-      // Keep a tiny preview for the bubble if data is still present and small.
-      data: s.data && s.data.length < 80_000 ? s.data : '',
+      id: s.id,
+      mimeType: s.mimeType,
+      name: s.name,
+      path: s.path,
+      preview: s.preview || undefined,
+      data: '',
     }))
     this.addBlock<TextBlock>({
       id: this.nextId('user'),
@@ -814,6 +893,8 @@ export class GrokSession implements vscode.Disposable {
     this.rememberSession(this.sessionId)
     this.turnActive = true
     this.cancelling = false
+    // Fresh turn — previous plan dock is stale (todo list from last task).
+    this.clearPlan()
     this.status.agentState = 'thinking'
     this.pushStatus()
     try {
@@ -831,10 +912,17 @@ export class GrokSession implements vscode.Disposable {
       if (!this.cancelling) this.addNotice('error', `Prompt failed: ${msg}`)
     } finally {
       this.turnActive = false
+      this.clearPlan()
       this.status.agentState = this.client?.running ? 'idle' : 'stopped'
       this.pushStatus()
       await this.flushAfterTurn()
     }
+  }
+
+  /** Plan dock is turn-scoped — drop it when the turn ends or a new one starts. */
+  private clearPlan(): void {
+    if (!this.status.planEntries?.length) return
+    this.status.planEntries = undefined
   }
 
   private async buildPromptBlocks(
@@ -1154,6 +1242,7 @@ export class GrokSession implements vscode.Disposable {
     }
     this.clearTranscript()
     this.gate.reset()
+    this.readPaths.clear()
     this.status.planEntries = undefined
     this.interjections.length = 0
     this.forceNext = undefined
@@ -1256,7 +1345,9 @@ export class GrokSession implements vscode.Disposable {
       case 'fs/read_text_file': {
         const p = rawParams as ReadTextFileParams
         try {
-          return await this.fs.readTextFile(p)
+          const result = await this.fs.readTextFile(p)
+          this.notePathRead(p.path)
+          return result
         } catch (err) {
           // Soft tool error for the agent — includes CLOUD_PATH_HINT when relevant so it can
           // change strategy instead of hard-looping the same Read.
@@ -1310,10 +1401,34 @@ export class GrokSession implements vscode.Disposable {
     }
   }
 
+  private notePathRead(filePath: string): void {
+    this.readPaths.add(pathKey(filePath))
+  }
+
   private async onWriteRequest(params: WriteTextFileParams): Promise<null> {
     const verdict = this.gate.checkWrite(params.path)
     if (verdict.action === 'deny') {
       throw rpcFail(-32000, withCloudToolHint(params.path, verdict.reason))
+    }
+
+    // Claude-style: existing files must be Read in this session before Write.
+    // Also forces cloud placeholders to hydrate when the agent complies.
+    const exists = await this.fs.exists(params.path)
+    if (exists && !this.readPaths.has(pathKey(params.path))) {
+      throw rpcFail(
+        -32000,
+        [
+          'Read the file first before writing to it.',
+          `Path: ${params.path}`,
+          'Call your Read tool on this path, then retry the edit with the full intended content.',
+          'Creating a brand-new file does not require a prior Read.',
+          isCloudPath(params.path)
+            ? 'On cloud drives (Google Drive, etc.), a successful Read also downloads the file so Write is more reliable.'
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      )
     }
 
     if (verdict.action === 'ask') {
@@ -1322,7 +1437,7 @@ export class GrokSession implements vscode.Disposable {
         requestId: `apr-${++this.approvalSeq}`,
         kind: 'write',
         title:
-          oldText === null
+          oldText === null && !exists
             ? `Create ${path.basename(params.path)}`
             : `Edit ${path.basename(params.path)}`,
         path: params.path,
@@ -1338,7 +1453,10 @@ export class GrokSession implements vscode.Disposable {
       }
     }
     try {
-      return await this.fs.writeTextFile(params)
+      const result = await this.fs.writeTextFile(params)
+      // A successful write counts as knowing the file for follow-up edits.
+      this.notePathRead(params.path)
+      return result
     } catch (err) {
       // Soft failure message for the agent — includes CLOUD_PATH_HINT when relevant.
       throw rpcFail(
@@ -1625,7 +1743,8 @@ export class GrokSession implements vscode.Disposable {
 
     switch (update.sessionUpdate) {
       // Our own prompt echoed back — and, during session/load, the replayed history. A live turn
-      // already has its user block, so only the replay needs rendering.
+      // already has its user block, so only the replay needs rendering. ACP echoes the *agent*
+      // prompt (plan preamble + image path notes), not the UI-facing draft — strip those.
       case 'user_message_chunk': {
         if (this.turnActive) return
         const text = textOf((update as { content?: unknown }).content)
@@ -1636,7 +1755,7 @@ export class GrokSession implements vscode.Disposable {
           ts: Date.now(),
           kind: 'text',
           role: 'user',
-          text: stripPlanPreamble(text),
+          text: stripAgentPromptDecorations(text),
           streaming: false,
         })
         return
@@ -1688,14 +1807,13 @@ export class GrokSession implements vscode.Disposable {
       }
 
       case 'tool_call_delta_chunk': {
-        // Arrives before the tool call itself; shows a card the moment grok starts a tool.
-        // These come in pairs and only the first carries an id — the follow-up is a raw
-        // `arguments_delta`. Without this guard it minted an anonymous card that nothing ever
-        // updated, which is the "() Tool" that span forever.
+        // Earliest signal while args stream. Do not paint yet — a bare "Search" card that
+        // expands a second later feels fake. Hold briefly; tool_call usually follows with
+        // label+input so the first paint is already complete. Only the first chunk carries id.
         const p = update as { tool_call_id?: string; name?: string }
         if (!p.tool_call_id) return
         this.closeStreams()
-        this.ensureToolBlock(p.tool_call_id, { name: p.name })
+        this.holdToolReveal(p.tool_call_id, p.name)
         return
       }
 
@@ -1708,6 +1826,7 @@ export class GrokSession implements vscode.Disposable {
         const xaiName = p._meta?.['x.ai/tool']?.name ?? ''
         const xaiLabel = p._meta?.['x.ai/tool']?.label ?? ''
         if (isPlanTool(xaiName, xaiLabel, p.title)) {
+          this.releaseToolHold(p.toolCallId)
           const existing = this.toolBlocks.get(p.toolCallId)
           if (existing) {
             this.removeBlock(existing.id)
@@ -1715,8 +1834,11 @@ export class GrokSession implements vscode.Disposable {
           }
           return
         }
+        const seedName =
+          xaiName || this.toolHolds.get(p.toolCallId)?.name || undefined
+        this.releaseToolHold(p.toolCallId)
         const block = this.ensureToolBlock(p.toolCallId, {
-          name: xaiName || undefined,
+          name: seedName,
         })
         this.applyToolPayload(block, p)
         if (isPlanTool(block.name, block.label, block.title)) {
@@ -1778,6 +1900,7 @@ export class GrokSession implements vscode.Disposable {
       case 'turn_completed': {
         const p = update as { stop_reason?: string; usage?: TurnUsage }
         this.closeStreams()
+        this.clearPlan()
         this.accumulate(p.usage)
         this.addBlock({
           id: this.nextId('turn'),
@@ -1809,6 +1932,60 @@ export class GrokSession implements vscode.Disposable {
     this.status.lastTurnTotalTokens = usage.totalTokens
   }
 
+  /**
+   * Defer painting a bare name-only tool card. History replay paints immediately so order stays
+   * faithful; live turns wait for tool_call (full args) or a short fallback.
+   */
+  private holdToolReveal(toolCallId: string, name?: string): void {
+    if (this.toolBlocks.has(toolCallId)) {
+      if (name) {
+        const block = this.toolBlocks.get(toolCallId)!
+        if (block.name === 'tool' || !block.name) {
+          this.patch(block, {
+            name,
+            label: stableToolLabel(name),
+            title: stableToolLabel(name),
+          })
+        }
+      }
+      return
+    }
+    if (this.replayingHistory) {
+      this.ensureToolBlock(toolCallId, { name })
+      return
+    }
+    const existing = this.toolHolds.get(toolCallId)
+    if (existing) {
+      if (name) existing.name = name
+      return
+    }
+    const hold: { name?: string; timer?: ReturnType<typeof setTimeout> } = {
+      name,
+    }
+    // ~140ms is under a human "tick" but usually enough for tool_call + input to land together.
+    hold.timer = setTimeout(() => {
+      this.toolHolds.delete(toolCallId)
+      if (!this.toolBlocks.has(toolCallId)) {
+        this.ensureToolBlock(toolCallId, { name: hold.name })
+      }
+    }, 140)
+    this.toolHolds.set(toolCallId, hold)
+  }
+
+  private releaseToolHold(toolCallId: string): void {
+    const hold = this.toolHolds.get(toolCallId)
+    if (!hold) return
+    if (hold.timer) clearTimeout(hold.timer)
+    this.toolHolds.delete(toolCallId)
+  }
+
+  private clearAllToolHolds(): void {
+    for (const hold of this.toolHolds.values()) {
+      if (hold.timer) clearTimeout(hold.timer)
+    }
+    this.toolHolds.clear()
+  }
+
   private ensureToolBlock(
     toolCallId: string,
     seed: { name?: string },
@@ -1816,15 +1993,16 @@ export class GrokSession implements vscode.Disposable {
     const existing = this.toolBlocks.get(toolCallId)
     if (existing) return existing
     const name = seed.name ?? 'tool'
+    const label = stableToolLabel(name)
     const block = this.addBlock<ToolBlock>({
       id: this.nextId('tool'),
       ts: Date.now(),
       kind: 'tool',
       toolCallId,
       name,
-      label: prettifyToolName(name),
-      toolKind: 'unknown',
-      title: prettifyToolName(name),
+      label,
+      toolKind: kindGuessFromName(name),
+      title: label,
       status: 'pending',
       readOnly: true,
       locations: [],
@@ -1838,11 +2016,16 @@ export class GrokSession implements vscode.Disposable {
   private applyToolPayload(block: ToolBlock, p: ToolCallUpdatePayload): void {
     const xai = p._meta?.['x.ai/tool']
     const patch: Record<string, unknown> = {}
-    if (xai?.name) {
-      patch.name = xai.name
-      patch.label = xai.label ?? prettifyToolName(xai.name)
-    }
+    const nextName = xai?.name || block.name
+    if (xai?.name && xai.name !== block.name) patch.name = xai.name
+    // Prefer a stable kind-based label so we never thrash Search → Search Replace → Edit.
+    const nextLabel = stableToolLabel(nextName, xai?.label)
+    if (nextLabel !== block.label) patch.label = nextLabel
     if (xai?.kind ?? p.kind) patch.toolKind = (xai?.kind ?? p.kind) as ToolKind
+    else if (block.toolKind === 'unknown' && nextName) {
+      const guess = kindGuessFromName(nextName)
+      if (guess !== 'unknown') patch.toolKind = guess
+    }
     if (typeof xai?.read_only === 'boolean') patch.readOnly = xai.read_only
     if (xai?.input ?? p.rawInput) patch.input = xai?.input ?? p.rawInput
     if (p.title) patch.title = p.title
@@ -1877,20 +2060,6 @@ export class GrokSession implements vscode.Disposable {
     for (const b of this.toolBlocks.values())
       if (b.id === blockId) return b.toolCallId
     return undefined
-  }
-
-  private onTerminalOutput(terminalId: string, chunk: string): void {
-    const blockId = this.terminalToBlock.get(terminalId)
-    if (!blockId) return
-    const block = this.blocks.find((b) => b.id === blockId)
-    if (!block || block.kind !== 'tool') return
-    block.liveOutput = (block.liveOutput ?? '') + chunk
-    this.deps.post({
-      type: 'blockPatch',
-      id: blockId,
-      patch: {},
-      appendOutput: chunk,
-    })
   }
 
   // ------------------------------------------------------------------ sessions, rewind, worktree
@@ -2469,7 +2638,79 @@ function prettifyToolName(name: string): string {
     .join(' ')
 }
 
-/** Replayed history includes anything we prepended, which the user never typed. */
+/**
+ * Fixed labels from the wire tool name so the card does not morph as x.ai metadata arrives
+ * (e.g. search_replace never flashes as "Search Replace" before becoming "Edit").
+ */
+function stableToolLabel(name?: string, xaiLabel?: string): string {
+  const n = (name ?? '').toLowerCase().replace(/-/g, '_')
+  const byName: Record<string, string> = {
+    read_file: 'Read',
+    read: 'Read',
+    write: 'Write',
+    write_file: 'Write',
+    search_replace: 'Edit',
+    str_replace: 'Edit',
+    strreplace: 'Edit',
+    edit: 'Edit',
+    apply_patch: 'Edit',
+    delete: 'Delete',
+    delete_file: 'Delete',
+    move: 'Move',
+    run_terminal_command: 'Terminal',
+    bash: 'Terminal',
+    shell: 'Terminal',
+    execute: 'Terminal',
+    list_dir: 'List',
+    list: 'List',
+    glob: 'Search',
+    grep: 'Search',
+    search: 'Search',
+    web_search: 'Web',
+    web_fetch: 'Fetch',
+    fetch: 'Fetch',
+    todo_write: 'Plan',
+    task: 'Task',
+    spawn: 'Task',
+  }
+  if (n && byName[n]) return byName[n]
+  // Prefer a short x.ai label when we have no map entry (not the long ACP title).
+  if (xaiLabel?.trim() && xaiLabel.trim().length <= 18) return xaiLabel.trim()
+  if (name && name !== 'tool') return prettifyToolName(name)
+  return 'Tool'
+}
+
+function kindGuessFromName(name?: string): ToolKind | 'unknown' {
+  const n = (name ?? '').toLowerCase().replace(/-/g, '_')
+  if (!n || n === 'tool') return 'unknown'
+  if (
+    n.includes('search_replace') ||
+    n.includes('str_replace') ||
+    n === 'edit' ||
+    n.includes('apply_patch')
+  )
+    return 'edit'
+  if (n.includes('write')) return 'write'
+  if (n.includes('delete')) return 'delete'
+  if (n.includes('move') || n.includes('rename')) return 'move'
+  if (
+    n.includes('terminal') ||
+    n.includes('bash') ||
+    n.includes('shell') ||
+    n.includes('execute') ||
+    n.includes('command')
+  )
+    return 'execute'
+  if (n.includes('grep') || n.includes('glob') || n === 'search')
+    return 'search'
+  if (n.includes('web_search') || n.includes('web_fetch') || n === 'fetch')
+    return 'fetch'
+  if (n.includes('list')) return 'list'
+  if (n.includes('read')) return 'read'
+  if (n.includes('think')) return 'think'
+  return 'unknown'
+}
+
 function mimeToExt(mime: string): string {
   if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg'
   if (mime === 'image/webp') return 'webp'
@@ -2489,10 +2730,39 @@ function isPlanTool(name?: string, label?: string, title?: string): boolean {
   return false
 }
 
-function stripPlanPreamble(text: string): string {
-  return text.startsWith('<system-reminder>')
-    ? text.replace(/^<system-reminder>[\s\S]*?<\/system-reminder>\s*/, '')
-    : text
+/**
+ * Replayed `user_message_chunk` text is what we sent on the wire (plan preamble, image path
+ * notes, default attachment placeholders) — not what the user typed. Strip host decorations so
+ * the bubble matches a live prompt.
+ */
+function stripAgentPromptDecorations(text: string): string {
+  let out = text
+  // Plan-mode system reminder we prepend on the wire.
+  if (out.startsWith('<system-reminder>')) {
+    out = out.replace(/^<system-reminder>[\s\S]*?<\/system-reminder>\s*/, '')
+  }
+  // Single-image path note from buildPromptBlocks.
+  out = out.replace(
+    /\n*\s*\[User attached an image\. Saved at:[\s\S]*?\]\s*$/i,
+    '',
+  )
+  // Multi-image path note.
+  out = out.replace(
+    /\n*\s*\[User attached \d+ images:[\s\S]*?Read those paths if you need the pixels\.\]\s*$/i,
+    '',
+  )
+  out = out.trim()
+  // Host/UI placeholders when the user sent only an image (no typed caption).
+  if (
+    !out ||
+    /^Please look at the attached image\(s\)\.?$/i.test(out) ||
+    /^Please look at the attached image\(s\) \(paths in the previous note\)\.?$/i.test(
+      out,
+    )
+  ) {
+    return '(image attachment)'
+  }
+  return out
 }
 
 function numberFrom(

@@ -100,6 +100,22 @@ export class FsBridge {
     return { content: slice(text, params.line ?? null, params.limit ?? null) }
   }
 
+  /** True if a file (or symlink) exists at path — used for read-before-write. */
+  async exists(filePath: string): Promise<boolean> {
+    const normalized = normalizeFsPath(filePath)
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(normalized))
+      return true
+    } catch {
+      try {
+        await fsp.access(normalized)
+        return true
+      } catch {
+        return false
+      }
+    }
+  }
+
   /** Returns the pre-write content so the caller can show a diff. `null` = file did not exist. */
   async currentContent(filePath: string): Promise<string | null> {
     const normalized = normalizeFsPath(filePath)
@@ -250,7 +266,12 @@ export function agentCloudToolHint(filePathOrCwd: string): string {
   ].join('\n')
 }
 
-function normalizeFsPath(p: string): string {
+/** Canonical path for Set membership (read-before-write tracking, etc.). */
+export function pathKey(p: string): string {
+  return path.resolve(normalizeFsPath(p)).toLowerCase()
+}
+
+export function normalizeFsPath(p: string): string {
   // Agents sometimes send file:// URIs or mixed separators.
   let s = p.trim()
   if (s.startsWith('file:')) {
@@ -271,7 +292,7 @@ function normalizeFsPath(p: string): string {
 }
 
 function pathsEqual(a: string, b: string): boolean {
-  return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase()
+  return pathKey(a) === pathKey(b)
 }
 
 function sleep(ms: number): Promise<void> {

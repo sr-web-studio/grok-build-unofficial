@@ -31,7 +31,7 @@
     <span class="chev" class:closed={!open}><Icon name="chevron" size={13} /></span>
   </button>
   {#if open}
-    <div class="body"><Markdown text={block.text} /></div>
+    <div class="body"><Markdown text={block.text} streaming={block.streaming} /></div>
   {/if}
 </div>
 

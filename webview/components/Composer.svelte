@@ -115,16 +115,30 @@
     if (picked >= matches.length) picked = 0;
   });
 
+  /**
+   * Grow with content, but never trust `height: auto` alone: in a flex column that can
+   * briefly report the remaining viewport as scrollHeight and lock the box at MAX.
+   * Always collapse to MIN first, measure content, then clamp.
+   */
   function autogrow(el: HTMLTextAreaElement) {
-    el.style.height = 'auto';
-    const next = Math.max(MIN_HEIGHT, Math.min(el.scrollHeight, MAX_HEIGHT));
+    el.style.height = `${MIN_HEIGHT}px`;
+    el.style.overflowY = 'hidden';
+    // scrollHeight after the min reset is content-only (not a prior inflated height).
+    const content = el.scrollHeight;
+    const next = Math.max(MIN_HEIGHT, Math.min(content, MAX_HEIGHT));
     el.style.height = `${next}px`;
-    el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
+    el.style.overflowY = content > MAX_HEIGHT ? 'auto' : 'hidden';
   }
 
   $effect(() => {
-    // Keep the two-line default after mount and after clearing the draft.
-    if (input) autogrow(input);
+    // Track draft so clear-on-send / insertText re-clamp height.
+    void text;
+    const el = input;
+    if (!el) return;
+    // Layout may still be settling right after bind:this / status re-render.
+    requestAnimationFrame(() => {
+      if (input === el) autogrow(el);
+    });
   });
 
   function accept(name: string) {
@@ -153,6 +167,7 @@
           id,
           mimeType: img.mimeType || 'image/jpeg',
           data: img.data,
+          preview: img.preview,
           name: img.name,
         });
         stagedIds.push(id);
@@ -223,6 +238,7 @@
             id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             mimeType: prepared.mimeType,
             data: prepared.data,
+            preview: prepared.preview,
             name: file.name || prepared.name,
           },
         ];
@@ -235,6 +251,7 @@
             id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             mimeType: file.type || 'image/png',
             data,
+            preview: data.length < 40_000 ? data : undefined,
             name: file.name,
           },
         ];
@@ -259,8 +276,11 @@
    * Downscale large screenshots so host↔webview messages stay under VS Code IPC limits
    * and the agent can still see the picture.
    */
-  function prepareImage(file: File): Promise<{ data: string; mimeType: string; name: string }> {
+  function prepareImage(
+    file: File,
+  ): Promise<{ data: string; preview: string; mimeType: string; name: string }> {
     const MAX_EDGE = 1280;
+    const PREVIEW_EDGE = 96;
     const JPEG_QUALITY = 0.72;
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
@@ -284,8 +304,28 @@
           const mimeType = 'image/jpeg';
           const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
           const comma = dataUrl.indexOf(',');
+          const data = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+
+          // Tiny thumb for the chat bubble after host strips full `data`.
+          const pScale = Math.min(1, PREVIEW_EDGE / Math.max(width, height));
+          const pw = Math.max(1, Math.round(width * pScale));
+          const ph = Math.max(1, Math.round(height * pScale));
+          const pCanvas = document.createElement('canvas');
+          pCanvas.width = pw;
+          pCanvas.height = ph;
+          const pCtx = pCanvas.getContext('2d');
+          if (!pCtx) {
+            reject(new Error('no canvas'));
+            return;
+          }
+          pCtx.drawImage(canvas, 0, 0, pw, ph);
+          const pUrl = pCanvas.toDataURL('image/jpeg', 0.7);
+          const pComma = pUrl.indexOf(',');
+          const preview = pComma >= 0 ? pUrl.slice(pComma + 1) : pUrl;
+
           resolve({
-            data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl,
+            data,
+            preview,
             mimeType,
             name: file.name || 'paste.jpg',
           });
@@ -323,7 +363,10 @@
   }
 
   function thumb(img: PromptImage): string {
-    return `data:${img.mimeType};base64,${img.data}`;
+    if (img.preview) return `data:image/jpeg;base64,${img.preview}`;
+    if (img.data) return `data:${img.mimeType};base64,${img.data}`;
+    if (img.webviewUri) return img.webviewUri;
+    return '';
   }
 
   function preview(t: string): string {

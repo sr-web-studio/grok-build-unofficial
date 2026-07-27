@@ -56,8 +56,6 @@
 
   let scroller = $state<HTMLDivElement | null>(null);
   let stuck = $state(true);
-  /** Wall-clock seconds the current turn has been open (for the working line). */
-  let busySeconds = $state(0);
   /** Which user message is currently pinned (scroll-aware — not only the chronologically last). */
   let stickyUserId = $state<string | null>(null);
   /** Expanded long user messages by block id. */
@@ -196,51 +194,14 @@
     expandedUsers = { ...expandedUsers, [id]: !expandedUsers[id] };
   }
 
-  const busy = $derived(agentState === 'thinking');
   const statusLoading = $derived(Boolean(loadingHistory) || agentState === 'starting');
 
-  /** What the sparse gap is most likely doing, based on the last open block. */
-  const workingHint = $derived.by(() => {
-    if (!busy) return '';
-    const last = [...blocks].reverse().find((b) => {
-      if (b.kind === 'thinking' && b.streaming) return true;
-      if (b.kind === 'text' && b.role === 'assistant' && b.streaming) return true;
-      if (b.kind === 'tool' && (b.status === 'pending' || b.status === 'in_progress' || b.waiting))
-        return true;
-      return false;
-    });
-    if (last?.kind === 'thinking' && last.streaming) return 'Thinking';
-    if (last?.kind === 'text' && last.streaming) return 'Writing';
-    if (last?.kind === 'tool') {
-      if (last.waiting) return 'Waiting for approval';
-      return last.label ? `Running ${last.label}` : 'Running a tool';
-    }
-    // Quiet stretch between model steps — the pause the user noticed.
-    return 'Working';
-  });
-
-  $effect(() => {
-    if (!busy) {
-      busySeconds = 0;
-      return;
-    }
-    busySeconds = 0;
-    const started = Date.now();
-    const id = setInterval(() => {
-      busySeconds = Math.floor((Date.now() - started) / 1000);
-    }, 1000);
-    return () => clearInterval(id);
-  });
-
   function thumb(img: PromptImage): string {
-    return `data:${img.mimeType};base64,${img.data}`;
-  }
-
-  function formatBusy(s: number): string {
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}m ${r.toString().padStart(2, '0')}s`;
+    // Prefer tiny preview (always kept), then full data, then host webview URI for saved path.
+    if (img.preview) return `data:image/jpeg;base64,${img.preview}`;
+    if (img.data) return `data:${img.mimeType || 'image/jpeg'};base64,${img.data}`;
+    if (img.webviewUri) return img.webviewUri;
+    return '';
   }
 </script>
 
@@ -325,7 +286,7 @@
             {/each}
             {#if row.text.text}
               <div class="body">
-                <Markdown text={row.text.text} />
+                <Markdown text={row.text.text} streaming={row.text.streaming} />
               </div>
             {/if}
           </div>
@@ -352,7 +313,12 @@
               {#if block.images?.length}
                 <div class="imgs">
                   {#each block.images as img (img.id)}
-                    <img class="img" src={thumb(img)} alt={img.name ?? 'attachment'} title={img.path ?? img.name} />
+                    {@const src = thumb(img)}
+                    {#if src}
+                      <img class="img" src={src} alt={img.name ?? 'attachment'} title={img.path ?? img.name} />
+                    {:else}
+                      <span class="img-fallback" title={img.path ?? img.name}>{img.name ?? 'image'}</span>
+                    {/if}
                   {/each}
                 </div>
               {/if}
@@ -364,7 +330,7 @@
             <div class="bubble assistant" class:gb-caret={block.streaming}>
               <div class="role gb-kicker">Grok</div>
               <div class="body">
-                <Markdown text={block.text} />
+                <Markdown text={block.text} streaming={block.streaming} />
               </div>
             </div>
           {/if}
@@ -386,22 +352,6 @@
       </div>
     {/each}
 
-    <!--
-      Quiet gaps between thought → tools → more tools are normal (model is still on the wire).
-      This row keeps the turn feeling alive so a 5s pause does not look like a hang.
-    -->
-    {#if busy}
-      <div class="working" aria-live="polite" aria-busy="true">
-        <span class="pulse-ring" aria-hidden="true"></span>
-        <span class="working-copy">
-          <span class="working-title">{workingHint}</span>
-          <span class="working-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          {#if busySeconds > 0}
-            <span class="working-time" title="Time on this turn">{formatBusy(busySeconds)}</span>
-          {/if}
-        </span>
-      </div>
-    {/if}
   </div>
 </div>
 
@@ -465,7 +415,8 @@
     flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 10px 10px 16px;
+    /* Room for the Latest chip only — Working lives in App chrome under the chat. */
+    padding: 10px 10px 48px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -475,100 +426,6 @@
     opacity: 0.25;
     pointer-events: none;
     overflow: hidden;
-  }
-
-  .working {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 2px;
-    padding: 8px 10px;
-    border: 1px dashed color-mix(in srgb, var(--gb-accent) 45%, var(--gb-rule));
-    background: color-mix(in srgb, var(--gb-accent) 8%, transparent);
-    color: var(--gb-dim);
-    font-size: 0.9em;
-  }
-
-  .pulse-ring {
-    flex: 0 0 auto;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--gb-accent);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gb-accent) 55%, transparent);
-    animation: live-pulse 1.6s ease-out infinite;
-  }
-
-  @keyframes live-pulse {
-    0% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--gb-accent) 50%, transparent);
-      opacity: 1;
-    }
-    70% {
-      box-shadow: 0 0 0 8px transparent;
-      opacity: 0.85;
-    }
-    100% {
-      box-shadow: 0 0 0 0 transparent;
-      opacity: 1;
-    }
-  }
-
-  .working-copy {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    min-width: 0;
-    flex-wrap: wrap;
-  }
-
-  .working-title {
-    color: var(--vscode-foreground);
-    font-weight: 700;
-    font-size: 0.95em;
-  }
-
-  .working-dots {
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-  }
-
-  .working-dots i {
-    display: block;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--gb-accent);
-    opacity: 0.35;
-    animation: dot-bounce 1.2s ease-in-out infinite;
-  }
-
-  .working-dots i:nth-child(2) {
-    animation-delay: 0.15s;
-  }
-
-  .working-dots i:nth-child(3) {
-    animation-delay: 0.3s;
-  }
-
-  @keyframes dot-bounce {
-    0%,
-    80%,
-    100% {
-      opacity: 0.3;
-      transform: translateY(0);
-    }
-    40% {
-      opacity: 1;
-      transform: translateY(-2px);
-    }
-  }
-
-  .working-time {
-    font-family: var(--gb-mono);
-    font-size: 0.85em;
-    color: var(--gb-dim);
   }
 
   /*
@@ -758,6 +615,15 @@
     border-radius: var(--gb-radius);
     object-fit: contain;
     background: var(--gb-surface-sunken);
+  }
+
+  .img-fallback {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border: 1px dashed var(--gb-rule);
+    font-size: 11px;
+    color: var(--gb-dim);
   }
 
   .assistant {

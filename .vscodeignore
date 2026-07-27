@@ -40,3 +40,6 @@ recordings/**
 # Local debug screenshots
 issue*.png
 _issue*
+
+# Workspace agent paste-ups (written at runtime; never ship in the VSIX)
+.grok-attachments/**

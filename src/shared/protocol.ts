@@ -63,11 +63,19 @@ export interface TranscriptBlockBase {
 export interface PromptImage {
   id: string
   mimeType: string
-  /** Raw base64 (no data: prefix). Kept for UI thumbnails in the webview. */
+  /**
+   * Full image base64 for the agent (may be stripped from transcript UI messages to keep IPC small).
+   */
   data: string
+  /**
+   * Tiny JPEG/PNG base64 for chat thumbnails only — always small enough to round-trip in blockAdd.
+   */
+  preview?: string
   name?: string
   /** Absolute path once the host wrote the file into the workspace. */
   path?: string
+  /** webview.asWebviewUri string, filled by the panel when posting to the webview. */
+  webviewUri?: string
 }
 
 export interface TextBlock extends TranscriptBlockBase {
@@ -360,6 +368,8 @@ export type WebviewMessage =
       id: string
       mimeType: string
       data: string
+      /** Tiny thumb for the chat bubble after full `data` is stripped. */
+      preview?: string
       name?: string
     }
   | {

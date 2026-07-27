@@ -3,12 +3,17 @@
 
   interface Props {
     text: string;
+    /**
+     * While true, incomplete markdown delimiters are softened so raw `**` / `` ` `` / half-links
+     * do not flash on screen mid-token (same idea as Copilot / Claude chat).
+     */
+    streaming?: boolean;
   }
 
-  let { text }: Props = $props();
+  let { text, streaming = false }: Props = $props();
 
   // renderMarkdown escapes everything before adding markup, so {@html} is safe here.
-  const html = $derived(renderMarkdown(text));
+  const html = $derived(renderMarkdown(text, { streaming }));
 </script>
 
 <div class="md">{@html html}</div>

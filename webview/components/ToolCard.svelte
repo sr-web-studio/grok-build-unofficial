@@ -69,6 +69,13 @@
       .filter((l) => l.length > 0);
     return (terminal ? lines.at(-1) : lines[0]) ?? '';
   });
+  /**
+   * While the tool is still running, keep the card one fixed-height header row. Peek/tail/diff
+   * previews only appear after completion — mid-flight content thrash (empty → first line →
+   * multi-line) is what made tool cards feel artificial.
+   */
+  const showPeek = $derived(!open && !running && Boolean(diff));
+  const showTail = $derived(!open && !running && !diff && Boolean(tail));
   const hasBody = $derived(Boolean(diff) || body.length > 0 || Object.keys(input).length > 0);
   const icon = $derived(kindIcons[block.toolKind] ?? 'file');
   /** Terminal output gets the console treatment; anything else stays in the editor's code block. */
@@ -114,7 +121,7 @@
         {/if}
       </span>
       <span class="label gb-kicker">{block.label}</span>
-      {#if target}<span class="target" title={target}>{target}</span>{/if}
+      <span class="target" title={target || undefined}>{target}</span>
       {#if block.waiting}<span class="gb-tag">waiting</span>{/if}
       {#if !block.readOnly}<span class="gb-tag mutating">writes</span>{/if}
     </button>
@@ -132,14 +139,12 @@
     {/if}
   </div>
 
-  <!-- Collapsed cards still show what the tool did: a few lines of the change, or the last line
-       of output. Losing track of a fast run was the complaint; a silent one-line card is what
-       caused it. -->
-  {#if !open && diff}
+  <!-- Preview only after the tool finishes — in-flight cards stay a single stable header row. -->
+  {#if showPeek && diff}
     <button class="peek" onclick={() => (manual = true)} aria-label="Expand this edit">
       <DiffView oldText={diff.oldText} newText={diff.newText} maxRows={6} preview />
     </button>
-  {:else if !open && tail}
+  {:else if showTail}
     <div class="tail" title={tail}>{tail}</div>
   {/if}
 
@@ -257,17 +262,24 @@
 
   .label {
     flex: 0 0 auto;
+    min-width: 4.5em;
   }
 
+  /* Always reserve the target slot so path/query arriving a beat later does not reflow the head. */
   .target {
     flex: 1 1 auto;
     min-width: 0;
+    min-height: 1.2em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--gb-dim);
     font-family: var(--gb-mono);
     font-size: 0.9em;
+  }
+
+  .target:empty::after {
+    content: '\00a0';
   }
 
   .mutating {

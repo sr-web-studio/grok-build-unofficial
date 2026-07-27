@@ -82,7 +82,52 @@
   let scrollTranscriptToBottom = $state<() => void>(() => undefined);
 
   const busy = $derived(status.agentState === 'thinking' || status.agentState === 'awaitingApproval');
+  const turnBusy = $derived(status.agentState === 'thinking');
   const noGit = $derived(status.isGitRepo === false);
+
+  /** Quiet gap between tools/stream — chrome under chat, never overlaid on messages. */
+  let busySeconds = $state(0);
+  const workingHint = $derived.by(() => {
+    if (!turnBusy) return '';
+    const last = [...blocks].reverse().find((b) => {
+      if (b.kind === 'thinking' && b.streaming) return true;
+      if (b.kind === 'text' && b.role === 'assistant' && b.streaming) return true;
+      if (
+        b.kind === 'tool' &&
+        (b.status === 'pending' || b.status === 'in_progress' || b.waiting)
+      )
+        return true;
+      return false;
+    });
+    if (last?.kind === 'thinking' && last.streaming) return 'Thinking';
+    if (last?.kind === 'text' && last.streaming) return 'Writing';
+    if (last?.kind === 'tool') {
+      if (last.waiting) return 'Waiting';
+      // Short fixed verbs — avoid "Running SearchReplace…" length thrash.
+      return last.label || 'Tool';
+    }
+    return 'Working';
+  });
+
+  $effect(() => {
+    if (!turnBusy) {
+      busySeconds = 0;
+      return;
+    }
+    busySeconds = 0;
+    const started = Date.now();
+    const id = setInterval(() => {
+      busySeconds = Math.floor((Date.now() - started) / 1000);
+    }, 1000);
+    return () => clearInterval(id);
+  });
+
+  function formatBusy(s: number): string {
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}m ${r.toString().padStart(2, '0')}s`;
+  }
 
   $effect(() => {
     saveDraft(draft);
@@ -480,48 +525,65 @@
   </div>
 
   <!--
-    Transcript + floating plan. Latest is a sibling after Plan so it always wins the stack
-    and sits in the bottom-right corner of whatever is currently at the bottom of the chat.
+    Stream (messages + Latest) and Plan are stacked, not overlaid:
+    - Plan is in-flow under the transcript so it never covers chat text
+    - Latest floats only inside the stream pane (above Plan, never on top of it)
   -->
   <div class="chat">
-    <Transcript
-      {blocks}
-      {showThinking}
-      {autoExpandThinking}
-      cwd={status.cwd}
-      {revision}
-      agentState={status.agentState}
-      loadingHistory={status.loadingHistory}
-      bind:jumpVisible
-      onJumpReady={(api) => {
-        scrollTranscriptToBottom = api.scrollToBottom;
-      }}
-      onApprove={(requestId, decision: ApprovalDecision) =>
-        send({ type: 'approve', requestId, decision })}
-      onPlanDecision={(requestId, approve, feedback) =>
-        send({ type: 'planDecision', requestId, approve, feedback })}
-      onAnswerQuestion={(requestId, response: QuestionResponse) =>
-        send({ type: 'answerQuestion', requestId, response })}
-      onOpenPath={(path, line) => send({ type: 'openPath', path, line })}
-      onOpenDiff={(blockId) => send({ type: 'openDiff', blockId })}
-      onShowLog={() => send({ type: 'showLog' })}
-    />
+    <div class="chat-stream">
+      <Transcript
+        {blocks}
+        {showThinking}
+        {autoExpandThinking}
+        cwd={status.cwd}
+        {revision}
+        agentState={status.agentState}
+        loadingHistory={status.loadingHistory}
+        bind:jumpVisible
+        onJumpReady={(api) => {
+          scrollTranscriptToBottom = api.scrollToBottom;
+        }}
+        onApprove={(requestId, decision: ApprovalDecision) =>
+          send({ type: 'approve', requestId, decision })}
+        onPlanDecision={(requestId, approve, feedback) =>
+          send({ type: 'planDecision', requestId, approve, feedback })}
+        onAnswerQuestion={(requestId, response: QuestionResponse) =>
+          send({ type: 'answerQuestion', requestId, response })}
+        onOpenPath={(path, line) => send({ type: 'openPath', path, line })}
+        onOpenDiff={(blockId) => send({ type: 'openDiff', blockId })}
+        onShowLog={() => send({ type: 'showLog' })}
+      />
+      {#if jumpVisible}
+        <button
+          class="chat-jump"
+          type="button"
+          title="Jump to latest"
+          aria-label="Jump to latest"
+          onclick={() => scrollTranscriptToBottom()}
+        >
+          <Icon name="arrowDown" size={14} />
+          <span>Latest</span>
+        </button>
+      {/if}
+    </div>
     {#if status.planEntries?.length}
       <PlanDock entries={status.planEntries} />
     {/if}
-    {#if jumpVisible}
-      <button
-        class="chat-jump"
-        type="button"
-        title="Jump to latest"
-        aria-label="Jump to latest"
-        onclick={() => scrollTranscriptToBottom()}
-      >
-        <Icon name="arrowDown" size={14} />
-        <span>Latest</span>
-      </button>
-    {/if}
   </div>
+
+  <!--
+    Fixed chrome between chat and composer — never overlays transcript text, never sits inside
+    the scrollport (that caused per-second layout thrash with the timer). Fixed height + nowrap
+    so the label/timer cannot reflow and shove the composer.
+  -->
+  {#if turnBusy}
+    <div class="working-bar" aria-live="polite" aria-busy="true">
+      <span class="pulse-ring" aria-hidden="true"></span>
+      <span class="working-title">{workingHint}</span>
+      <span class="working-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="working-time" title="Time on this turn">{formatBusy(busySeconds)}</span>
+    </div>
+  {/if}
 
   <Composer
     bind:text={draft}
@@ -719,8 +781,16 @@
     min-height: 0;
   }
 
-  /* Holds the transcript + floating plan overlay + Latest (top of the local stack). */
+  /* Column: message stream (flex) + plan strip (auto). No overlays on message text. */
   .chat {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Only this pane hosts the Latest chip — never stacked over the plan bar. */
+  .chat-stream {
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
@@ -732,7 +802,7 @@
     position: absolute;
     right: 12px;
     bottom: 12px;
-    z-index: 20;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -755,6 +825,109 @@
   .chat-jump:hover {
     border-color: var(--gb-accent);
     filter: brightness(1.08);
+  }
+
+  /* Single fixed row under the chat — does not float over messages or resize with the timer. */
+  .working-bar {
+    flex: 0 0 32px;
+    height: 32px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border-top: 1px solid color-mix(in srgb, var(--gb-accent) 35%, var(--gb-rule));
+    background: color-mix(
+      in srgb,
+      var(--vscode-sideBar-background, var(--vscode-editor-background)) 90%,
+      var(--gb-accent)
+    );
+    color: var(--gb-dim);
+    font-size: 0.9em;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .pulse-ring {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gb-accent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gb-accent) 55%, transparent);
+    animation: live-pulse 1.6s ease-out infinite;
+  }
+
+  @keyframes live-pulse {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--gb-accent) 50%, transparent);
+      opacity: 1;
+    }
+    70% {
+      box-shadow: 0 0 0 6px transparent;
+      opacity: 0.85;
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+      opacity: 1;
+    }
+  }
+
+  .working-title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--vscode-foreground);
+    font-weight: 700;
+    font-size: 0.92em;
+  }
+
+  .working-dots {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+
+  .working-dots i {
+    display: block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--gb-accent);
+    opacity: 0.35;
+    animation: dot-bounce 1.2s ease-in-out infinite;
+  }
+
+  .working-dots i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .working-dots i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes dot-bounce {
+    0%,
+    80%,
+    100% {
+      opacity: 0.3;
+    }
+    40% {
+      opacity: 1;
+    }
+  }
+
+  .working-time {
+    flex: 0 0 auto;
+    margin-left: auto;
+    min-width: 3.2em;
+    text-align: right;
+    font-family: var(--gb-mono);
+    font-size: 0.85em;
+    color: var(--gb-dim);
+    font-variant-numeric: tabular-nums;
   }
 
   /*

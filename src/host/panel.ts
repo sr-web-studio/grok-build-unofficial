@@ -3,7 +3,12 @@ import { join } from 'node:path'
 
 import * as vscode from 'vscode'
 
-import type { HostMessage, WebviewMessage } from '../shared/protocol'
+import type {
+  HostMessage,
+  PromptImage,
+  TranscriptBlock,
+  WebviewMessage,
+} from '../shared/protocol'
 import { GrokSession } from './session'
 
 /**
@@ -31,9 +36,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     view.webview.options = {
       enableScripts: true,
+      // Workspace roots so attachment files under .grok-attachments/ can load as <img src>.
       localResourceRoots: [
         vscode.Uri.joinPath(this.extensionUri, 'dist'),
         vscode.Uri.joinPath(this.extensionUri, 'media'),
+        ...(vscode.workspace.workspaceFolders?.map((f) => f.uri) ?? []),
       ],
     }
     view.webview.html = this.html(view.webview)
@@ -61,7 +68,52 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.queued.push(message)
       return
     }
-    void this.view.webview.postMessage(message)
+    void this.view.webview.postMessage(this.withWebviewImageUris(message))
+  }
+
+  /**
+   * Turn absolute disk paths on user-message images into webview-safe URIs so <img> works after
+   * we strip full base64 from the transcript payload.
+   */
+  private withWebviewImageUris(message: HostMessage): HostMessage {
+    const webview = this.view?.webview
+    if (!webview) return message
+
+    const mapImgs = (images?: PromptImage[]): PromptImage[] | undefined => {
+      if (!images?.length) return images
+      return images.map((img) => {
+        if (!img.path || img.preview || img.data) return img
+        try {
+          return {
+            ...img,
+            webviewUri: webview
+              .asWebviewUri(vscode.Uri.file(img.path))
+              .toString(),
+          }
+        } catch {
+          return img
+        }
+      })
+    }
+
+    const mapBlock = (block: TranscriptBlock): TranscriptBlock => {
+      if (block.kind !== 'text' || !block.images?.length) return block
+      return { ...block, images: mapImgs(block.images) }
+    }
+
+    if (message.type === 'blockAdd') {
+      return { ...message, block: mapBlock(message.block) }
+    }
+    if (message.type === 'state') {
+      return {
+        ...message,
+        state: {
+          ...message.state,
+          blocks: message.state.blocks.map(mapBlock),
+        },
+      }
+    }
+    return message
   }
 
   async reveal(): Promise<void> {
@@ -96,6 +148,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           id: msg.id,
           mimeType: msg.mimeType,
           data: msg.data,
+          preview: msg.preview,
           name: msg.name,
         })
         return

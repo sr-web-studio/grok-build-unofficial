@@ -8,7 +8,7 @@
 
   let { entries }: Props = $props();
 
-  /** Default collapsed — expand to see every item. */
+  /** Default collapsed — expand upward into reserved max height, not over the transcript. */
   let open = $state(false);
 
   const done = $derived(entries.filter((e) => e.status === 'completed').length);
@@ -24,56 +24,42 @@
 </script>
 
 {#if total > 0}
-  <!-- Floated over the transcript; does not steal flex height from the chat. -->
-  <div class="float" role="region" aria-label="Plan">
-    <div class="dock">
-      <button class="head" type="button" onclick={() => (open = !open)} aria-expanded={open}>
-        <span class="chev" class:closed={!open}><Icon name="chevron" size={12} /></span>
-        <span class="gb-kicker">Plan</span>
-        <span class="count gb-meta">{done}/{total}</span>
-        <span class="bar"><span class="fill" style="width: {total ? (done / total) * 100 : 0}%"></span></span>
-        <span class="sum" title={summary}>{summary}</span>
-      </button>
-      {#if open}
-        <ul>
-          {#each entries as entry, i (i)}
-            <li class={entry.status ?? 'pending'}>
-              <span class="box">
-                {#if entry.status === 'completed'}
-                  <Icon name="check" size={11} />
-                {:else if entry.status === 'in_progress'}
-                  <span class="dot"></span>
-                {/if}
-              </span>
-              <span class="text">{entry.content}</span>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
+  <!--
+    In-flow under the transcript (not absolute). Takes a strip of height so messages never sit
+    behind the plan chrome; expand grows upward within max-height on the list only.
+  -->
+  <div class="dock" role="region" aria-label="Plan">
+    <button class="head" type="button" onclick={() => (open = !open)} aria-expanded={open}>
+      <span class="chev" class:closed={!open}><Icon name="chevron" size={12} /></span>
+      <span class="gb-kicker">Plan</span>
+      <span class="count gb-meta">{done}/{total}</span>
+      <span class="bar"><span class="fill" style="width: {total ? (done / total) * 100 : 0}%"></span></span>
+      <span class="sum" title={summary}>{summary}</span>
+    </button>
+    {#if open}
+      <ul>
+        {#each entries as entry, i (i)}
+          <li class={entry.status ?? 'pending'}>
+            <span class="box">
+              {#if entry.status === 'completed'}
+                <Icon name="check" size={11} />
+              {:else if entry.status === 'in_progress'}
+                <span class="dot"></span>
+              {/if}
+            </span>
+            <span class="text">{entry.content}</span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </div>
 {/if}
 
 <style>
-  .float {
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    z-index: 6;
-    pointer-events: none;
-  }
-
   .dock {
-    pointer-events: auto;
-    border: 1px solid var(--gb-rule-strong, var(--gb-rule));
-    background: color-mix(
-      in srgb,
-      var(--vscode-editorWidget-background, var(--vscode-sideBar-background, var(--gb-surface))) 94%,
-      transparent
-    );
-    backdrop-filter: blur(8px);
-    box-shadow: var(--gb-shadow);
+    flex: 0 0 auto;
+    border-top: 1px solid var(--gb-rule-strong, var(--gb-rule));
+    background: var(--gb-surface);
   }
 
   .head {
@@ -81,7 +67,7 @@
     align-items: center;
     gap: 7px;
     width: 100%;
-    padding: 6px 9px;
+    padding: 6px 10px;
     border: none;
     background: none;
     color: var(--vscode-foreground);
@@ -134,14 +120,13 @@
   ul {
     list-style: none;
     margin: 0;
-    padding: 0 9px 8px;
+    padding: 0 10px 8px;
     display: flex;
     flex-direction: column;
     gap: 3px;
     border-top: 1px solid var(--gb-rule);
-    max-height: 12em;
+    max-height: 10em;
     overflow: auto;
-    background: color-mix(in srgb, var(--vscode-editor-background) 40%, transparent);
   }
 
   li {
