@@ -36,3 +36,7 @@ recordings/**
 
 # Never ship a nested vsix
 *.vsix
+
+# Local debug screenshots
+issue*.png
+_issue*
