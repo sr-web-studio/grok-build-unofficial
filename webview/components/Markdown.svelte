@@ -56,15 +56,13 @@
         ta.remove();
       }
     }
+    // Toggle is CSS-only (`.md-copy.copied` swaps idle/done). Attribute `hidden` was ignored
+    // once both spans had `display: inline-flex` in webview styles.
     btn.classList.add('copied');
-    const idle = btn.querySelector('.md-copy-idle');
-    const done = btn.querySelector('.md-copy-done');
-    if (idle instanceof HTMLElement) idle.hidden = true;
-    if (done instanceof HTMLElement) done.hidden = false;
+    btn.setAttribute('aria-label', 'Copied');
     window.setTimeout(() => {
       btn.classList.remove('copied');
-      if (idle instanceof HTMLElement) idle.hidden = false;
-      if (done instanceof HTMLElement) done.hidden = true;
+      btn.setAttribute('aria-label', 'Copy code');
     }, 1600);
   }
 </script>
@@ -187,9 +185,15 @@
 
   .md :global(.md-copy-idle),
   .md :global(.md-copy-done) {
-    display: inline-flex;
+    display: none;
     align-items: center;
     gap: 4px;
+  }
+
+  /* Default: only Copy. After click: only Copied. */
+  .md :global(.md-copy:not(.copied) .md-copy-idle),
+  .md :global(.md-copy.copied .md-copy-done) {
+    display: inline-flex;
   }
 
   .md :global(.md-copy-icon) {

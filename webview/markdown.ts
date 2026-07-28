@@ -282,9 +282,11 @@ function renderCodeBlock(code: string, lang: string): string {
     `<div class="md-code-wrap">` +
     `<div class="md-code-head">` +
     `<span class="md-code-lang">${escapeHtml(label)}</span>` +
+    // Visibility of idle/done is pure CSS via `.md-copy.copied` — do not rely on [hidden]
+    // (webview styles with display:inline-flex were showing both labels at once).
     `<button type="button" class="md-copy" data-md-copy title="Copy code" aria-label="Copy code">` +
     `<span class="md-copy-idle">${COPY_SVG}<span class="md-copy-label">Copy</span></span>` +
-    `<span class="md-copy-done" hidden>${CHECK_SVG}<span class="md-copy-label">Copied</span></span>` +
+    `<span class="md-copy-done">${CHECK_SVG}<span class="md-copy-label">Copied</span></span>` +
     `</button>` +
     `</div>` +
     `<pre class="md-code"><code>${escapeHtml(code)}</code></pre>` +
