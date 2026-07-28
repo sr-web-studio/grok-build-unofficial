@@ -34,6 +34,7 @@ import type {
   NoticeBlock,
   PermissionMode,
   SetupHint,
+  CommandResult,
   PromptImage,
   QuestionResponse,
   QueuedMessage,
@@ -75,6 +76,9 @@ const X = {
   sessionsList: '_x.ai/sessions/list',
   sessionSummaries: '_x.ai/session_summaries/session_list',
   sessionRename: '_x.ai/session/rename',
+  sessionInfo: '_x.ai/session/info',
+  sessionUsage: '_x.ai/session/usage',
+  compactConversation: '_x.ai/compact_conversation',
   worktreeCreate: '_x.ai/git/worktree/create',
   worktreeResume: '_x.ai/git/worktree/resume_session',
   worktreeList: '_x.ai/git/worktree/list',
@@ -216,6 +220,14 @@ export class GrokSession implements vscode.Disposable {
 
   private turnActive = false
   private cancelling = false
+  /**
+   * Slash/utility mode: agent text is buffered into a modal result instead of chat bubbles.
+   */
+  private utilityMode = false
+  private utilityCommand = ''
+  private utilityBuffer = ''
+  /** Run after the in-flight turn (slash commands queued while busy). */
+  private pendingSlash: string | undefined
   private readonly interjections: QueuedInterjection[] = []
   /**
    * Next prompt to run after the current turn is cancelled (force-push one queued message).
@@ -446,6 +458,7 @@ export class GrokSession implements vscode.Disposable {
     this.deps.log(
       `session ready: ${this.sessionId} (grok ${this.status.agentVersion ?? '?'})`,
     )
+    void this.refreshContext()
     const driveHint = cloudDriveHint(this.deps.cwd)
     if (driveHint) this.addNotice('info', driveHint)
   }
@@ -861,6 +874,11 @@ export class GrokSession implements vscode.Disposable {
       this.addNotice('warn', 'Nothing to send (empty message and no images).')
       return
     }
+    // Pure slash commands (no attachments) go through the utility path — modal result, not chat.
+    if (trimmed && isSlashOnly(trimmed) && !imgs?.length) {
+      await this.slashCommand(trimmed)
+      return
+    }
     try {
       await this.ensureStarted()
     } catch {
@@ -926,8 +944,329 @@ export class GrokSession implements vscode.Disposable {
       this.clearPlan()
       this.status.agentState = this.client?.running ? 'idle' : 'stopped'
       this.pushStatus()
+      // Prefer live session/info over last-turn usage for the context HUD.
+      void this.refreshContext()
       await this.flushAfterTurn()
     }
+  }
+
+  /**
+   * Run a Grok slash/utility command. Prefer a modal result (no chat pollution). If a turn is
+   * already running, queue and run when it ends.
+   */
+  async slashCommand(text: string): Promise<void> {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    try {
+      await this.ensureStarted()
+    } catch {
+      return
+    }
+    if (this.turnActive || this.utilityMode) {
+      this.pendingSlash = trimmed
+      this.addNotice(
+        'info',
+        `Queued ${trimmed.split(/\s+/)[0]} — runs when the current turn finishes.`,
+      )
+      return
+    }
+    await this.executeSlash(trimmed)
+  }
+
+  /** Compact conversation context (ACP), then refresh the HUD. */
+  async compactContext(): Promise<void> {
+    await this.slashCommand('/compact')
+  }
+
+  /** Pull live context used/total from `_x.ai/session/info`. */
+  async refreshContext(): Promise<void> {
+    const client = this.client
+    if (!client?.running || !this.sessionId) return
+    try {
+      const raw = await client.request(X.sessionInfo, {
+        sessionId: this.sessionId,
+      })
+      const info = unwrapResult(raw) as Record<string, unknown>
+      const ctx = (info.context ?? info) as Record<string, unknown>
+      const used = numberFrom(ctx, ['used', 'usedTokens', 'totalTokens'])
+      const total = numberFrom(ctx, ['total', 'totalTokens', 'limit', 'max'])
+      // Avoid treating total as both used and total when only one field exists.
+      const usedN =
+        typeof used === 'number'
+          ? used
+          : numberFrom(info, ['used', 'totalTokens'])
+      const totalN =
+        typeof total === 'number' && total !== usedN
+          ? total
+          : (numberFrom(info, ['total', 'contextTokens']) ??
+            this.status.contextTokens)
+      if (typeof usedN === 'number') this.status.lastTurnTotalTokens = usedN
+      if (typeof totalN === 'number' && totalN > 0)
+        this.status.contextTokens = totalN
+      this.pushStatus()
+    } catch (err) {
+      this.deps.log(`session/info: ${(err as Error).message}`)
+    }
+  }
+
+  private async executeSlash(text: string): Promise<void> {
+    const parsed = parseSlash(text)
+    if (!parsed) {
+      await this.prompt(text)
+      return
+    }
+    const { name, args } = parsed
+    switch (name) {
+      case 'context':
+      case 'ctx':
+        await this.runContextCommand(text)
+        return
+      case 'compact':
+      case 'compress':
+      case 'summarize':
+        await this.runCompactCommand(text)
+        return
+      case 'usage':
+      case 'cost':
+        await this.runUsageCommand(text)
+        return
+      default:
+        // Unknown slash: still utility-mode so the agent reply lands in a modal, not the chat.
+        await this.runUtilityPrompt(text, `/${name}${args ? ` ${args}` : ''}`)
+        return
+    }
+  }
+
+  private async runContextCommand(command: string): Promise<void> {
+    await this.refreshContext()
+    const used = this.status.lastTurnTotalTokens
+    const total = this.status.contextTokens
+    const pct =
+      used != null && total
+        ? Math.min(100, Math.round((used / total) * 100))
+        : undefined
+    const lines = [
+      pct != null ? `**Context:** ${pct}% full` : '**Context**',
+      used != null && total
+        ? `${formatTokens(used)} / ${formatTokens(total)} tokens used`
+        : used != null
+          ? `${formatTokens(used)} tokens used (window size unknown)`
+          : 'Could not read context from the agent. Try again after a turn.',
+      this.status.currentModelId
+        ? `Model: \`${this.status.currentModelId}\``
+        : '',
+      this.status.sessionId
+        ? `Session: \`${this.status.sessionId.slice(0, 8)}…\``
+        : '',
+    ].filter(Boolean)
+    this.postCommandResult({
+      command,
+      title: 'Context',
+      body: lines.join('\n\n'),
+      kind:
+        pct != null && pct >= 90
+          ? 'warn'
+          : pct != null && pct >= 70
+            ? 'info'
+            : 'success',
+    })
+  }
+
+  private async runCompactCommand(command: string): Promise<void> {
+    const client = this.client
+    if (!client || !this.sessionId) {
+      this.postCommandResult({
+        command,
+        title: 'Compact',
+        body: 'No active session.',
+        kind: 'error',
+      })
+      return
+    }
+    const beforeUsed = this.status.lastTurnTotalTokens
+    const beforeTotal = this.status.contextTokens
+    const beforePct =
+      beforeUsed != null && beforeTotal
+        ? Math.min(100, Math.round((beforeUsed / beforeTotal) * 100))
+        : undefined
+    // Immediate modal so the user sees progress (compact can take several seconds).
+    this.postCommandResult({
+      command,
+      title: 'Compacting…',
+      body: [
+        'Shrinking conversation context. This can take a moment — leave this open.',
+        beforePct != null
+          ? `Before: **${beforePct}%** (${formatTokens(beforeUsed!)} / ${formatTokens(beforeTotal!)}).`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      kind: 'info',
+    })
+    this.status.agentState = 'thinking'
+    this.pushStatus()
+    try {
+      const raw = await client.request(X.compactConversation, {
+        sessionId: this.sessionId,
+      })
+      const body = unwrapResult(raw)
+      this.deps.log(
+        `compact_conversation ok: ${typeof body === 'object' ? JSON.stringify(body).slice(0, 200) : String(body).slice(0, 200)}`,
+      )
+      await this.refreshContext()
+      const used = this.status.lastTurnTotalTokens
+      const total = this.status.contextTokens
+      const pct =
+        used != null && total
+          ? Math.min(100, Math.round((used / total) * 100))
+          : undefined
+      const detail = formatUtilityPayload(body)
+      const lines = [
+        detail ?? 'Conversation context was compacted successfully.',
+        beforePct != null && pct != null
+          ? `**${beforePct}% → ${pct}%** (${formatTokens(beforeUsed!)} → ${formatTokens(used!)} of ${formatTokens(total!)}).`
+          : pct != null
+            ? `Now **${pct}%** (${formatTokens(used!)} / ${formatTokens(total!)}).`
+            : '',
+      ].filter(Boolean)
+      this.postCommandResult({
+        command,
+        title: 'Context compacted',
+        body: lines.join('\n\n'),
+        kind: 'success',
+      })
+    } catch (err) {
+      // Method may be missing on some CLI builds — fall back to asking the agent.
+      this.deps.log(`compact_conversation: ${(err as Error).message}`)
+      this.postCommandResult({
+        command,
+        title: 'Compacting…',
+        body: 'Native compact unavailable — asking the agent to summarize instead…',
+        kind: 'info',
+      })
+      await this.runUtilityPrompt(
+        '/compact',
+        'Please compact/summarize this conversation to free context. Confirm when done and report approximate context remaining.',
+      )
+    } finally {
+      this.status.agentState = this.client?.running ? 'idle' : 'stopped'
+      this.pushStatus()
+    }
+  }
+
+  private async runUsageCommand(command: string): Promise<void> {
+    const client = this.client
+    if (!client || !this.sessionId) return
+    try {
+      const raw = await client.request(X.sessionUsage, {
+        sessionId: this.sessionId,
+      })
+      const body = unwrapResult(raw) as Record<string, unknown>
+      const usage = (body.usage ?? body) as Record<string, unknown>
+      const t = this.status.totals
+      const lines = [
+        '**Session usage**',
+        `Input: ${formatTokens(numberFrom(usage, ['inputTokens', 'input_tokens']) ?? t.inputTokens)}`,
+        `Output: ${formatTokens(numberFrom(usage, ['outputTokens', 'output_tokens']) ?? t.outputTokens)}`,
+        `Cached reads: ${formatTokens(numberFrom(usage, ['cachedReadTokens', 'cached_read_tokens']) ?? t.cachedReadTokens)}`,
+        `Cost: $${(numberFrom(usage, ['costUsd', 'cost_usd']) ?? t.costUsd).toFixed(4)}`,
+        `Turns: ${numberFrom(usage, ['turns', 'numTurns', 'num_turns']) ?? t.turns}`,
+      ]
+      this.postCommandResult({
+        command,
+        title: 'Usage',
+        body: lines.join('\n\n'),
+        kind: 'info',
+      })
+    } catch {
+      // Fall back to local totals + context.
+      const t = this.status.totals
+      await this.refreshContext()
+      this.postCommandResult({
+        command,
+        title: 'Usage (local)',
+        body: [
+          `Input: ${formatTokens(t.inputTokens)}`,
+          `Output: ${formatTokens(t.outputTokens)}`,
+          `Cached: ${formatTokens(t.cachedReadTokens)}`,
+          `Cost: $${t.costUsd.toFixed(4)}`,
+          `Turns: ${t.turns}`,
+        ].join('\n\n'),
+        kind: 'info',
+      })
+    }
+  }
+
+  /**
+   * Send a slash/utility prompt to the agent without adding user/assistant bubbles to the
+   * transcript. Captured text is shown in the command-result modal.
+   */
+  private async runUtilityPrompt(
+    command: string,
+    promptText: string,
+  ): Promise<void> {
+    const client = this.client
+    if (!client || !this.sessionId) return
+    this.utilityMode = true
+    this.utilityCommand = command
+    this.utilityBuffer = ''
+    this.turnActive = true
+    this.cancelling = false
+    this.status.agentState = 'thinking'
+    this.pushStatus()
+    // Show progress immediately — slash utilities can stream for a while with no chat bubbles.
+    this.postCommandResult({
+      command,
+      title: `${command}…`,
+      body: 'Running… results will appear here (not in the chat).',
+      kind: 'info',
+    })
+    try {
+      await client.request('session/prompt', {
+        sessionId: this.sessionId,
+        prompt: [{ type: 'text', text: promptText }],
+      })
+      this.closeStreams()
+      const body =
+        this.utilityBuffer.trim() ||
+        'The agent finished with no text. Check the protocol log if that is unexpected.'
+      this.postCommandResult({
+        command: this.utilityCommand || command,
+        title: this.utilityCommand || command,
+        body,
+        kind: 'info',
+      })
+    } catch (err) {
+      this.closeStreams()
+      if (!this.cancelling) {
+        this.postCommandResult({
+          command: this.utilityCommand || command,
+          title: this.utilityCommand || command,
+          body: `Failed: ${(err as Error).message}`,
+          kind: 'error',
+        })
+      }
+    } finally {
+      this.utilityMode = false
+      this.utilityCommand = ''
+      this.utilityBuffer = ''
+      this.turnActive = false
+      this.status.agentState = this.client?.running ? 'idle' : 'stopped'
+      this.pushStatus()
+      void this.refreshContext()
+      await this.flushAfterTurn()
+    }
+  }
+
+  private postCommandResult(partial: Omit<CommandResult, 'id' | 'ts'>): void {
+    this.deps.post({
+      type: 'commandResult',
+      result: {
+        id: this.nextId('cmd'),
+        ts: Date.now(),
+        ...partial,
+      },
+    })
   }
 
   /** Plan dock is turn-scoped — drop it when the turn ends or a new one starts. */
@@ -1126,6 +1465,12 @@ export class GrokSession implements vscode.Disposable {
   }
 
   private async flushAfterTurn(): Promise<void> {
+    if (this.pendingSlash) {
+      const cmd = this.pendingSlash
+      this.pendingSlash = undefined
+      await this.executeSlash(cmd)
+      return
+    }
     if (this.forceNext) {
       const next = this.forceNext
       this.forceNext = undefined
@@ -1775,6 +2120,11 @@ export class GrokSession implements vscode.Disposable {
       case 'agent_message_chunk': {
         const text = textOf((update as { content?: unknown }).content)
         if (!text) return
+        // Slash/utility: buffer for the modal — do not add chat bubbles.
+        if (this.utilityMode) {
+          this.utilityBuffer += text
+          return
+        }
         if (this.openThinking) {
           this.patch(this.openThinking, {
             streaming: false,
@@ -1799,6 +2149,7 @@ export class GrokSession implements vscode.Disposable {
       case 'agent_thought_chunk': {
         const text = textOf((update as { content?: unknown }).content)
         if (!text) return
+        if (this.utilityMode) return // keep modal free of thinking noise
         if (this.openText) {
           this.patch(this.openText, { streaming: false })
           this.openText = undefined
@@ -3020,6 +3371,66 @@ function samePath(a: string | undefined, b: string): boolean {
 function unwrapResult(res: unknown): unknown {
   const inner = (res as { result?: unknown } | null)?.result
   return inner !== undefined && inner !== null ? inner : res
+}
+
+/** `/context`, `/compact args` — no free-form prose, so we can route off the chat path. */
+function isSlashOnly(text: string): boolean {
+  return /^\/[\w:-]+(?:\s+\S[\s\S]*)?$/.test(text.trim())
+}
+
+function parseSlash(text: string): { name: string; args: string } | undefined {
+  const m = /^\/([\w:-]+)(?:\s+([\s\S]+))?$/.exec(text.trim())
+  if (!m) return undefined
+  return { name: m[1].toLowerCase(), args: (m[2] ?? '').trim() }
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`
+  if (n >= 1000) return `${Math.round(n / 100) / 10}k`
+  return String(Math.round(n))
+}
+
+/**
+ * Compact/session APIs often return `{}` or tiny envelopes — never show raw empty JSON to the user.
+ */
+function formatUtilityPayload(body: unknown): string | undefined {
+  if (body == null) return undefined
+  if (typeof body === 'string') {
+    const t = body.trim()
+    return t.length > 0 ? t : undefined
+  }
+  if (typeof body === 'object') {
+    const o = body as Record<string, unknown>
+    const keys = Object.keys(o)
+    if (keys.length === 0) return undefined
+    for (const k of [
+      'message',
+      'summary',
+      'status',
+      'detail',
+      'result',
+      'text',
+      'description',
+    ]) {
+      const v = o[k]
+      if (typeof v === 'string' && v.trim()) return v.trim()
+    }
+    // Nested result object with a string field
+    if (o.result && typeof o.result === 'object') {
+      const nested = formatUtilityPayload(o.result)
+      if (nested) return nested
+    }
+    // Meaningful non-empty object — pretty JSON in a fence
+    try {
+      const json = JSON.stringify(o, null, 2)
+      if (json === '{}' || json === '[]') return undefined
+      return '```json\n' + json + '\n```'
+    } catch {
+      return undefined
+    }
+  }
+  const s = String(body).trim()
+  return s.length > 0 && s !== '{}' && s !== 'undefined' ? s : undefined
 }
 
 function normalizeSessionList(

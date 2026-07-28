@@ -59,6 +59,8 @@ If the CLI is missing, the sidebar shows a short setup card with a link to insta
 - **Sessions** — history, rename, delete (store cleanup), auto titles
 - **Plan dock** — turn-scoped checklist above the composer
 - **Queue** — type while busy; send later or force-push
+- **Slash commands** — `/context`, `/compact`, `/usage` (and other Grok `/` commands) open a **result modal**, not chat bubbles; queued if a turn is running
+- **Context HUD** — colour-coded pressure; **Compact** when ≥70%
 - **Rewind** + **git worktrees** — sandboxed branches, apply back
 - **Editor integration** — unsaved buffers for reads, workspace-edit writes (native undo), real terminals
 - **Cloud / binary paths** — soft hints for the agent, not hard blocks

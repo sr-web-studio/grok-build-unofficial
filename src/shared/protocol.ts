@@ -276,7 +276,11 @@ export interface UiStatus {
     costUsd: number
     turns: number
   }
+  /** Context window size (from model or session/info). */
   contextTokens?: number
+  /**
+   * Tokens used in context (prefer live `_x.ai/session/info`; falls back to last turn total).
+   */
   lastTurnTotalTokens?: number
   queuedCount: number
   /** Live queue shown above the composer — not in the transcript until sent. */
@@ -307,6 +311,21 @@ export interface SetupHint {
   detail: string
   /** Official install / product page (open in external browser). */
   installUrl?: string
+}
+
+/**
+ * Result of a slash/utility command (`/context`, `/compact`, …). Shown in a modal so it does
+ * not pollute the chat transcript.
+ */
+export interface CommandResult {
+  id: string
+  /** What the user typed, e.g. `/context`. */
+  command: string
+  title: string
+  /** Plain or light markdown body. */
+  body: string
+  kind: 'info' | 'success' | 'warn' | 'error'
+  ts: number
 }
 
 export interface UiState {
@@ -369,6 +388,8 @@ export type HostMessage =
   | { type: 'rewindPoints'; points: RewindPoint[] }
   | { type: 'insertText'; text: string }
   | { type: 'focusInput' }
+  /** Slash / utility command finished — show in a modal, not as chat bubbles. */
+  | { type: 'commandResult'; result: CommandResult }
 
 // ---------------------------------------------------------------- webview → host
 
@@ -437,3 +458,9 @@ export type WebviewMessage =
   | { type: 'toggleThinking'; show: boolean }
   /** Open an https URL in the system browser (install docs, etc.). */
   | { type: 'openExternal'; url: string }
+  /** Run a Grok slash/utility command without (ideally) polluting the chat. */
+  | { type: 'slashCommand'; text: string }
+  /** Compact the conversation context window via ACP when available. */
+  | { type: 'compactContext' }
+  /** Refresh context used/total from `_x.ai/session/info`. */
+  | { type: 'refreshContext' }

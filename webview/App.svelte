@@ -12,6 +12,7 @@
     WorktreeAction,
   } from '../src/shared/protocol';
   import About from './components/About.svelte';
+  import CommandResult from './components/CommandResult.svelte';
   import Composer from './components/Composer.svelte';
   import Header from './components/Header.svelte';
   import Icon from './components/Icon.svelte';
@@ -19,6 +20,7 @@
   import StatusLine from './components/StatusLine.svelte';
   import Transcript from './components/Transcript.svelte';
   import { loadDraft, onHostMessage, saveDraft, send } from './ipc';
+  import type { CommandResult as CommandResultMsg } from '../src/shared/protocol';
 
   /** Until the host sends the real state, render a plausible shell instead of nothing. */
   const initialStatus: UiStatus = {
@@ -76,6 +78,8 @@
 
   let draft = $state(loadDraft());
   let focusSignal = $state(0);
+  /** Modal for /context, /compact, and other slash utilities (not chat bubbles). */
+  let commandResult = $state<CommandResultMsg | null>(null);
 
   /** Latest jump lives on the .chat layer so it paints above Plan / other bottom overlays. */
   let jumpVisible = $state(false);
@@ -141,6 +145,9 @@
         break;
       case 'focusInput':
         focusSignal += 1;
+        break;
+      case 'commandResult':
+        commandResult = message.result;
         break;
       default: {
         const exhaustive: never = message;
@@ -250,6 +257,9 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="app">
+  {#if commandResult}
+    <CommandResult result={commandResult} onClose={() => (commandResult = null)} />
+  {/if}
   <div class="top">
     <Header
       {showThinking}

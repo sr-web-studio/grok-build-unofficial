@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { UiStatus } from '../../src/shared/protocol';
+  import { send } from '../ipc';
 
   interface Props {
     status: UiStatus;
@@ -19,12 +20,19 @@
 
   const folder = $derived(status.cwd ? (status.cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? '') : '');
 
-  /** Context window pressure, based on the last turn's total tokens. */
+  /** Context pressure — live session/info preferred (host updates lastTurnTotalTokens). */
   const contextPct = $derived.by(() => {
     const window = status.contextTokens;
     const used = status.lastTurnTotalTokens;
-    if (!window || !used) return undefined;
+    if (!window || used == null || used < 0) return undefined;
     return Math.min(100, Math.round((used / window) * 100));
+  });
+
+  const contextTone = $derived.by((): 'ok' | 'warn' | 'hot' | undefined => {
+    if (contextPct == null) return undefined;
+    if (contextPct >= 90) return 'hot';
+    if (contextPct >= 70) return 'warn';
+    return 'ok';
   });
 
   const totalTokens = $derived(status.totals.inputTokens + status.totals.outputTokens);
@@ -33,6 +41,14 @@
     if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`;
     if (n >= 1000) return `${Math.round(n / 100) / 10}k`;
     return String(n);
+  }
+
+  function onCtxClick() {
+    send({ type: 'slashCommand', text: '/context' });
+  }
+
+  function onCompact() {
+    send({ type: 'compactContext' });
   }
 </script>
 
@@ -62,9 +78,38 @@
   <span class="spacer"></span>
 
   {#if contextPct !== undefined}
-    <span title="Last turn used {status.lastTurnTotalTokens} of {status.contextTokens} context tokens">
+    <button
+      type="button"
+      class="ctx"
+      class:ok={contextTone === 'ok'}
+      class:warn={contextTone === 'warn'}
+      class:hot={contextTone === 'hot'}
+      title="Context {contextPct}% — {status.lastTurnTotalTokens} / {status.contextTokens} tokens. Click for details."
+      onclick={onCtxClick}
+    >
       ctx {contextPct}%
-    </span>
+    </button>
+    {#if contextTone === 'hot'}
+      <button
+        type="button"
+        class="compact-btn hot"
+        title="Context is nearly full — compact to free room"
+        onclick={onCompact}
+        disabled={busy}
+      >
+        Compact
+      </button>
+    {:else if contextTone === 'warn'}
+      <button
+        type="button"
+        class="compact-btn warn"
+        title="Compact conversation to free context"
+        onclick={onCompact}
+        disabled={busy}
+      >
+        Compact
+      </button>
+    {/if}
   {/if}
   {#if totalTokens > 0}
     <span title="Session tokens (in + out); {compact(status.totals.cachedReadTokens)} cached reads">
@@ -243,5 +288,76 @@
     border-bottom-color: var(--gb-warn);
     background: color-mix(in srgb, var(--gb-warn) 12%, transparent);
     color: var(--vscode-foreground);
+  }
+
+  .ctx {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 1px 6px;
+    border: 1px solid transparent;
+    border-radius: var(--gb-radius);
+    background: none;
+    font: inherit;
+    font-family: var(--gb-mono);
+    font-size: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--gb-dim);
+  }
+
+  .ctx.ok {
+    color: var(--gb-ok);
+  }
+
+  .ctx.warn {
+    color: var(--gb-warn);
+    border-color: color-mix(in srgb, var(--gb-warn) 45%, transparent);
+    background: color-mix(in srgb, var(--gb-warn) 12%, transparent);
+  }
+
+  .ctx.hot {
+    color: var(--gb-danger);
+    border-color: color-mix(in srgb, var(--gb-danger) 50%, transparent);
+    background: color-mix(in srgb, var(--gb-danger) 14%, transparent);
+  }
+
+  .ctx:hover {
+    filter: brightness(1.08);
+  }
+
+  .compact-btn {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 1px 7px;
+    border: 1px solid var(--gb-rule);
+    border-radius: var(--gb-radius);
+    background: none;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    color: var(--vscode-foreground);
+  }
+
+  .compact-btn.warn {
+    border-color: var(--gb-warn);
+    color: var(--gb-warn);
+  }
+
+  .compact-btn.hot {
+    border-color: var(--gb-danger);
+    color: var(--gb-danger);
+    background: color-mix(in srgb, var(--gb-danger) 12%, transparent);
+  }
+
+  .compact-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  .compact-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 </style>

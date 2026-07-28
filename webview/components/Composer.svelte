@@ -157,6 +157,16 @@
     const snapshot = [...attachments];
     const promptText = value || (snapshot.length ? 'Please look at the attached image(s).' : '');
     try {
+      // Pure slash commands → host utility/modal path (no chat pollution).
+      if (value && /^\/[\w:-]+(?:\s+\S[\s\S]*)?$/.test(value) && snapshot.length === 0) {
+        send({ type: 'slashCommand', text: value });
+        text = '';
+        if (input) {
+          autogrow(input);
+          input.focus();
+        }
+        return;
+      }
       // Stage each image as its own message — one big prompt+base64 postMessage is dropped
       // silently by VS Code when the payload is large.
       const stagedIds: string[] = [];
