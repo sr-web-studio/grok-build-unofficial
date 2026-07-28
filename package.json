@@ -208,7 +208,7 @@
     "smoke:vsix": "npm run package && node tools/vscode-smoke.mjs --vsix",
     "package": "npm run typecheck && node esbuild.mjs --production && vsce package --no-dependencies",
     "publish:marketplace": "node tools/publish-marketplace.mjs",
-    "publish:openvsx": "ovsx publish --no-dependencies"
+    "publish:openvsx": "node tools/publish-openvsx.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

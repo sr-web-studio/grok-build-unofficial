@@ -47,9 +47,14 @@ code --install-extension grok-build-unofficial-<version>.vsix
 npm run publish:marketplace
 # → https://marketplace.visualstudio.com/items?itemName=sr-web-studio.grok-build-unofficial
 
-# Open VSX
-npx ovsx publish grok-build-unofficial-*.vsix -p "$OVSX_PAT"
+# Open VSX (reads OVSX_PAT from .env; creates namespace on first run if needed)
+npm run package   # ensure VSIX matches package.json publisher
+npm run publish:openvsx
+# → https://open-vsx.org/extension/sr-web-studio/grok-build-unofficial
 ```
+
+First Open VSX publish needs the namespace `sr-web-studio` (same as Marketplace publisher id).  
+`ovsx create-namespace sr-web-studio` is handled by `tools/publish-openvsx.mjs` / `tools/ovsx-setup-and-publish.mjs`.
 
 ## Tag-driven release (CI)
 
