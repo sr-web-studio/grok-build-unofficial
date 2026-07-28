@@ -7,36 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Permission mode, model, and reasoning effort now **persist** (Global + Workspace settings) and are re-applied after every agent start
-- Terminal / tool output strips **ANSI colour codes** (`gh`, npm, etc.) so cards stay readable
-- Renaming one session no longer bleeds onto the open untitled session
-- Reload / reopen resumes the **last real session** instead of minting a new blank untitled every time
-- Thinking blocks no longer paint over the following “Grok” bubble
-- `todo_write` / “plan write” tool cards are hidden; the checklist is the source of truth
-
-### Added
-
-- **Jump to latest** floating button when you scroll up in the transcript
-- **Image attach / paste** in the composer (saved under `.grok-attachments/`; path is injected into the prompt because current Grok CLI ACP reports `promptCapabilities.image: false`)
-- **Plan dock** above the composer (collapsed by default with count/status)
-- **Queue panel** above the input (not in the transcript); Send / Send all now; chat only gets a **queued** badge after send
-
 ## [0.1.0] — 2026-07-27
 
 ### Added
 
 - First public release: ACP-driven sidebar chat for the Grok Build CLI
-- Streaming assistant markdown, collapsible thinking, tool cards, diffs, todos
+- Streaming assistant markdown (batched paints + incomplete-syntax softening), collapsible thinking, tool cards, diffs
+- **Copy** control on fenced code blocks
 - Client-side permission gate: Ask / Accept edits / Plan / Bypass
 - Session history list with **rename** (`_x.ai/session/rename`) and store-based delete
-- Status line shows **current session title** (auto-summary or rename)
-- Clearer **You** / **Grok** message roles in the transcript
+- Status line shows **current session title** (auto-summary or rename) with a non-shifting busy cue
+- Clearer **You** / **Grok** message roles; sticky last-user pin (single-line)
+- **Image attach / paste** (workspace `.grok-attachments/`; path notes for the agent when ACP image blocks are unavailable)
+- **Plan dock** (turn-scoped; cleared when a turn ends)
+- **Queue panel** above the input; Send / Send all now; **queued** badge after flush
+- **Jump to latest** when scrolled up
 - Rewind checkpoints and git worktree create / resume / apply / remove
 - Editor integration: unsaved buffer reads, workspace-edit writes, real terminals
 - Protocol log channel with secret redaction
+- Soft cloud / binary path hints for agent file I/O (no hard block)
 - Webview UI harness and ACP probe tools for development
+
+### Fixed
+
+- Permission mode, model, and reasoning effort **persist** and re-apply after agent start
+- Terminal / tool output strips **ANSI** so cards stay readable
+- Session rename no longer bleeds onto the open untitled session
+- Reload resumes the **last real session** instead of minting a blank untitled every time
+- Tool cards wait for path/args before paint (no empty `READ` flash); failures show short human lines, not stack dumps
+- User image thumbs keep aspect ratio; attachment path notes stay out of the user bubble
+- Working/status ellipsis no longer shoves the rest of the status line
 
 ### Notes
 
