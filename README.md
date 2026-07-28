@@ -15,6 +15,7 @@ Streaming replies, thinking, tool cards, diffs, approvals, plans, session histor
 | Channel                 | How                                                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **VS Code Marketplace** | [Grok Build (unofficial)](https://marketplace.visualstudio.com/items?itemName=sr-web-studio.grok-build-unofficial) · id `sr-web-studio.grok-build-unofficial` |
+| **Open VSX**            | [open-vsx.org](https://open-vsx.org/extension/sr-web-studio/grok-build-unofficial) · same id (VSCodium, etc.)                                                 |
 | **VSIX**                | [GitHub Releases](https://github.com/sr-web-studio/grok-build-unofficial/releases) · `code --install-extension grok-build-unofficial-*.vsix`                  |
 
 ### Requirements
