@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import { send } from '../ipc';
 
   interface Props {
     agentVersion?: string;
@@ -20,20 +21,25 @@
   <div class="name">Grok Build UI <span class="gb-tag">Unofficial</span></div>
 
   <p class="body">
-    A community VS Code front-end for xAI's Grok Build CLI, talking to it over the Agent Client
-    Protocol. Not affiliated with or endorsed by xAI.
+    A <strong>community</strong> VS Code front-end for xAI’s Grok Build CLI (Agent Client Protocol).
+    <strong>Not affiliated with, endorsed by, or sponsored by xAI.</strong>
+    You need a separate, authenticated Grok Build CLI install — this extension is only the chat UI.
   </p>
 
   <dl class="facts">
     <dt>Agent</dt>
     <dd>grok {agentVersion ?? '—'}</dd>
+    <dt>CLI</dt>
+    <dd>
+      <button class="link" type="button" onclick={() => send({ type: 'openExternal', url: 'https://grok.x.ai/' })}>
+        grok.x.ai
+      </button>
+    </dd>
     <dt>Repository</dt>
     <dd>
-      {#if REPO_URL}
-        <a href={REPO_URL}>{REPO_URL}</a>
-      {:else}
-        <span class="dim">not published yet</span>
-      {/if}
+      <button class="link" type="button" onclick={() => send({ type: 'openExternal', url: REPO_URL })}>
+        GitHub
+      </button>
     </dd>
   </dl>
 </div>
@@ -96,12 +102,18 @@
     text-overflow: ellipsis;
   }
 
-  .dim {
-    color: var(--gb-dim);
-  }
 
-  a {
+
+  button.link {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-family: var(--gb-mono);
     color: var(--gb-accent);
+    text-decoration: underline;
+    cursor: pointer;
+    text-align: left;
   }
 
   button.x {

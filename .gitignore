@@ -1,23 +1,33 @@
+# Dependencies & build
 node_modules/
 dist/
 out/
 *.vsix
+*.map
 
-# ACP wire recordings: raw agent traffic, machine-specific paths, never committed
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# ACP wire recordings: machine paths + prompt content
 recordings/
 
-# Design hand-off from the design agent: reference material, kept locally
+# Local agent paste-ups / scratch
+.grok-attachments/
 .design-import/
 *.zip
+issue*.png
+_issue*
 
-.dev.vars
-.env
+# Logs & OS
 *.log
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Local screenshots / scratch (never ship)
-issue*.png
-
-# User-pasted images written by the extension for the agent to open
-.grok-attachments/
+# Editor / tooling noise
+.idea/
+*.swp
+*~

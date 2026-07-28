@@ -4,6 +4,7 @@
     ApprovalDecision,
     PromptImage,
     QuestionResponse,
+    SetupHint,
     TranscriptBlock,
   } from '../../src/shared/protocol';
   import Approval from './Approval.svelte';
@@ -11,6 +12,7 @@
   import Notice from './Notice.svelte';
   import PlanProposal from './PlanProposal.svelte';
   import Question from './Question.svelte';
+  import SetupCard from './SetupCard.svelte';
   import Thinking from './Thinking.svelte';
   import ToolCard from './ToolCard.svelte';
   import TurnFooter from './TurnFooter.svelte';
@@ -22,6 +24,8 @@
     cwd?: string;
     revision: number;
     agentState: AgentState;
+    /** Missing CLI / auth — show recovery instead of the empty prompt. */
+    setupHint?: SetupHint;
     /** Host is replaying a long session — show a shell, no scroll thrash. */
     loadingHistory?: boolean;
     /** Bound by App so the chat-layer Latest button can sit above Plan / other overlays. */
@@ -42,6 +46,7 @@
     cwd,
     revision,
     agentState,
+    setupHint = undefined,
     loadingHistory = false,
     jumpVisible = $bindable(false),
     onJumpReady,
@@ -233,8 +238,14 @@
   {/if}
 
   <div class="scroller" class:dimmed={statusLoading} bind:this={scroller} onscroll={onScroll}>
-    {#if visible.length === 0 && !statusLoading}
+    {#if setupHint && !statusLoading}
+      <SetupCard hint={setupHint} />
+    {:else if visible.length === 0 && !statusLoading}
       <div class="empty">
+        <p class="unofficial-line">
+          <span class="gb-tag">Unofficial</span>
+          Community UI for the Grok Build CLI — not affiliated with xAI.
+        </p>
         <p>Ask Grok to do something in this workspace.</p>
         <p class="dim">
           Writes and commands wait for your approval. <kbd>Enter</kbd> sends,
@@ -646,6 +657,17 @@
   .empty .dim {
     color: var(--gb-dim);
     font-size: 0.9em;
+  }
+
+  .unofficial-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px !important;
+    font-size: 0.88em;
+    color: var(--gb-dim);
+    line-height: 1.4;
   }
 
   kbd {

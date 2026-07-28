@@ -1,78 +1,81 @@
 # Grok Build (unofficial)
 
-A Claude Code-style chat UI for [VS Code](https://code.visualstudio.com/), driving the
-**[Grok Build CLI](https://grok.x.ai/)** over the
-[Agent Client Protocol](https://agentclientprotocol.com) (ACP).
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/sr-web-studio.grok-build-unofficial?label=VS%20Marketplace&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=sr-web-studio.grok-build-unofficial)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Streaming responses, thinking, tool cards, inline diffs, approval gates, plan mode, session
-history (with rename), rewind, and git worktrees — in a sidebar panel that uses the editor as the
-agent’s filesystem and terminal.
+A focused chat UI for [VS Code](https://code.visualstudio.com/) that drives the **[Grok Build CLI](https://grok.x.ai/)** over the [Agent Client Protocol](https://agentclientprotocol.com) (ACP).
 
-> **Unofficial.** This project is **not affiliated with, endorsed by, or sponsored by xAI**.
-> “Grok” and related marks belong to their respective owners. You need a working, authenticated
-> Grok Build CLI install; this extension is only a client UI.
+Streaming replies, thinking, tool cards, diffs, approvals, plans, session history, rewind, and git worktrees — in a sidebar that uses your editor for files and terminals.
+
+> **Unofficial community project.** Not affiliated with, endorsed by, or sponsored by xAI.  
+> “Grok” and related marks belong to their owners. This extension is a **client UI only** — you need a separate, authenticated [Grok Build CLI](https://grok.x.ai/) install.
 
 ## Install
 
-| Channel                 | How                                                                                                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **VS Code Marketplace** | Search **“Grok Build (unofficial)”** or install by id `srwebstudio.grok-build-unofficial` _(after first publish)_                                          |
-| **Open VSX**            | Same extension id for VSCodium / compatible editors _(after first publish)_                                                                                |
-| **VSIX**                | Download from [GitHub Releases](https://github.com/sr-web-studio/grok-build-unofficial/releases) → `code --install-extension grok-build-unofficial-*.vsix` |
+| Channel                 | How                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **VS Code Marketplace** | [Grok Build (unofficial)](https://marketplace.visualstudio.com/items?itemName=sr-web-studio.grok-build-unofficial) · id `sr-web-studio.grok-build-unofficial` |
+| **VSIX**                | [GitHub Releases](https://github.com/sr-web-studio/grok-build-unofficial/releases) · `code --install-extension grok-build-unofficial-*.vsix`                  |
 
 ### Requirements
 
-- VS Code **1.125+** (or a compatible editor for Open VSX)
-- [Grok Build CLI](https://grok.x.ai/) **0.2.112+**, authenticated (`grok` once in a terminal)
-- `grok` on your `PATH`, or set **`grokBuild.cliPath`** in settings
+- **VS Code 1.125+**
+- **[Grok Build CLI](https://grok.x.ai/) 0.2.112+**, signed in (`grok` works in a terminal)
+- `grok` on your `PATH`, or set `grokBuild.cliPath` in settings
+
+If the CLI is missing, the sidebar shows a short setup card with a link to install and a **Retry** button — no stack dumps.
 
 ## Quick start
 
 1. Install the extension and open a workspace folder.
-2. Click the **Grok Build** icon in the activity bar (or `Ctrl+Shift+G` / `Cmd+Shift+G`).
-3. The agent starts on first view; the first workspace folder becomes the session `cwd`.
-4. Type a prompt and press **Enter**. File writes and shell commands ask for approval (default mode).
+2. Open **Grok Build** from the activity bar (`Ctrl+Shift+G` / `Cmd+Shift+G`).
+3. The agent starts on first open; the first folder is the session `cwd`.
+4. Type a prompt and press **Enter**. Writes and shell commands ask for approval by default.
 
-Useful commands (Command Palette → “Grok Build”):
+**Command Palette → “Grok Build”:**
 
-- **New Session** — start a fresh conversation
-- **Add Selection to Chat** — `Ctrl+Alt+G` / `Cmd+Alt+G` with an editor selection
-- **Show Protocol Log** — JSON-RPC frames (secrets redacted) when `grokBuild.logProtocol` is on
-- **Restart Agent Process** — respawn `grok agent stdio`
+| Command               | Purpose                                                |
+| --------------------- | ------------------------------------------------------ |
+| New Session           | Fresh conversation                                     |
+| Add Selection to Chat | `Ctrl+Alt+G` / `Cmd+Alt+G` with a selection            |
+| Restart Agent Process | Respawn `grok agent stdio`                             |
+| Show Protocol Log     | Redacted JSON-RPC (when `grokBuild.logProtocol` is on) |
 
 ## Features
 
-- **Streaming chat** with collapsible thinking and per-turn token/cost footer
-- **Tool cards** with argument summaries, live command output, and unified diffs for writes
-- **Permission modes** (enforced by _this_ extension at the fs/terminal boundary):
+- **Streaming chat** — batched token paint, incomplete-markdown softening, code blocks with **Copy**
+- **Thinking** — collapsible reasoning stream
+- **Tool cards** — stable headers (wait for path/args), diffs, terminal output; short human errors on failure
+- **Permissions** (enforced by _this_ extension at the fs/terminal boundary):
 
-  | Mode            | Behaviour                                                         |
-  | --------------- | ----------------------------------------------------------------- |
-  | Ask (`default`) | Approve every file write and every command                        |
-  | Accept edits    | Writes apply automatically; commands still ask                    |
-  | Plan            | Read-only; writes/commands refused; plan-mode preamble on prompts |
-  | Bypass          | Nothing is asked                                                  |
+  | Mode            | Behaviour                             |
+  | --------------- | ------------------------------------- |
+  | Ask (`default`) | Approve every write and command       |
+  | Accept edits    | Writes auto-apply; commands still ask |
+  | Plan            | Read-only; plan preamble on prompts   |
+  | Bypass          | No prompts                            |
 
-- **Session history** for the current folder — open, **rename**, delete (store cleanup)
-- **Status line** shows agent state, **current session title**, folder, context %, tokens, cost
-- **Rewind** to earlier prompts (optionally with worktrees)
-- **Git worktrees** — create / resume / apply / remove sandboxed copies
+- **Sessions** — history, rename, delete (store cleanup), auto titles
+- **Plan dock** — turn-scoped checklist above the composer
+- **Queue** — type while busy; send later or force-push
+- **Rewind** + **git worktrees** — sandboxed branches, apply back
 - **Editor integration** — unsaved buffers for reads, workspace-edit writes (native undo), real terminals
+- **Cloud / binary paths** — soft hints for the agent, not hard blocks
 
 ## Settings
 
-All under `grokBuild.*`. Highlights:
+All under `grokBuild.*`:
 
-| Setting                     | Default     | Purpose                                          |
-| --------------------------- | ----------- | ------------------------------------------------ |
-| `cliPath`                   | `grok`      | Path to the CLI if not on `PATH`                 |
-| `permissionMode`            | `default`   | Approval gate mode                               |
-| `model` / `reasoningEffort` | CLI default | Launch-time model knobs                          |
-| `showThinking`              | `true`      | Stream reasoning into the transcript             |
-| `readUnsavedBuffers`        | `true`      | Serve open editor buffers to `fs/read_text_file` |
-| `applyEditsAsWorkspaceEdit` | `true`      | Apply writes via VS Code edit API                |
-| `useSharedLeader`           | `true`      | Attach to grok’s shared leader (sync with TUI)   |
-| `logProtocol`               | `false`     | Log redacted JSON-RPC to the output channel      |
+| Setting                     | Default     | Purpose                        |
+| --------------------------- | ----------- | ------------------------------ |
+| `cliPath`                   | `grok`      | CLI binary if not on `PATH`    |
+| `permissionMode`            | `default`   | Approval gate                  |
+| `model` / `reasoningEffort` | CLI default | Launch knobs                   |
+| `showThinking`              | `true`      | Stream reasoning into chat     |
+| `readUnsavedBuffers`        | `true`      | Serve open editors to reads    |
+| `applyEditsAsWorkspaceEdit` | `true`      | Writes via VS Code edit API    |
+| `useSharedLeader`           | `true`      | Attach to grok’s shared leader |
+| `logProtocol`               | `false`     | Log redacted frames to Output  |
 
 ## Develop
 
@@ -81,51 +84,47 @@ npm install
 npm run build          # dist/extension.js + dist/webview.js
 npm run watch          # rebuild on save
 npm run typecheck
-npm run smoke          # boots real VS Code; host-side checks (no paid turn)
-npm run package        # typecheck → prod bundle → .vsix
+npm run smoke          # real VS Code host checks (no paid turn required)
+npm run package        # production .vsix
 ```
 
-Press **F5** in this folder (**Run Extension**) or:
+**F5** in this folder (**Run Extension**), or:
 
 ```bash
-code --extensionDevelopmentPath=/path/to/grok-build-unofficial /path/to/some-workspace
+code --extensionDevelopmentPath=/path/to/grok-build-unofficial /path/to/workspace
 ```
 
-Webview UI harness (no VS Code):
+Webview harness (no VS Code):
 
 ```bash
 npm run build && python -m http.server 5599
-# open http://127.0.0.1:5599/tools/webview-harness/index.html
+# http://127.0.0.1:5599/tools/webview-harness/index.html
 ```
 
-Protocol tooling lives in `tools/` (`acp-probe`, `probe-methods`, `verify-live`). See
-[docs/acp-findings.md](docs/acp-findings.md).
+Protocol probes live in `tools/` (`acp-probe`, `probe-methods`, `verify-live`). Notes: [docs/acp-findings.md](docs/acp-findings.md).
 
-`recordings/` is gitignored: raw ACP traffic can contain machine paths and prompt content. Never
-commit `~/.grok/auth.json` or similar secrets.
+`recordings/` is gitignored. Never commit `.env`, `*.vsix`, or `~/.grok/auth.json`.
 
-## Known protocol limits
+## Protocol limits
 
-Grok’s TUI reaches some private methods over a leader channel that external ACP clients cannot use.
-These return `-32601` and are worked around client-side:
+Some TUI-only ACP methods are unreachable (`-32601`). Client-side workarounds:
 
-- **Interjection lands one turn late** — `_x.ai/queue/interject` is unreachable; queued text is sent as the next prompt
-- **Plan mode is client-side** — permission gate + prompt preamble (not grok’s own plan toggle)
-- No `_x.ai/queue/clear` or `_x.ai/permissions/reset` over ACP
-
-Session **rename** _is_ supported (`_x.ai/session/rename`). Session **delete** is not; the extension
-removes grok’s on-disk session store for that id instead.
+- Queued text sends as the **next** prompt (no live interject)
+- Plan mode is **permission gate + preamble** (not grok’s private plan toggle)
+- Session **rename** works; **delete** cleans grok’s on-disk store for that id
 
 ## Security
 
-This extension spawns a local `grok` process and can write files and run shell commands **with your
-approval** (or automatically in Bypass / Accept-edits modes). Review [SECURITY.md](SECURITY.md)
-before using Bypass in untrusted workspaces.
+The extension spawns local `grok` and can write files / run commands **with your approval** (or automatically in Accept edits / Bypass). Read [SECURITY.md](SECURITY.md) before Bypass on untrusted workspaces.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). PRs welcome.
 
 ## License
 
-[MIT](LICENSE) © SR Web Studio
+[MIT](LICENSE) © [SR Web Studio](https://github.com/sr-web-studio)
 
-## Publishing
+## Maintainers
 
-Maintainer notes for Marketplace + Open VSX: [docs/PUBLISHING.md](docs/PUBLISHING.md).
+Marketplace / Open VSX / tags: [docs/PUBLISHING.md](docs/PUBLISHING.md).

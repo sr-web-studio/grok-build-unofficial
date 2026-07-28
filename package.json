@@ -3,7 +3,7 @@
   "displayName": "Grok Build (unofficial)",
   "description": "Claude Code-style chat UI for the Grok Build CLI over the Agent Client Protocol. Unofficial — not affiliated with xAI.",
   "version": "0.1.0",
-  "publisher": "srwebstudio",
+  "publisher": "sr-web-studio",
   "license": "MIT",
   "private": true,
   "author": {
@@ -206,8 +206,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && svelte-check --tsconfig tsconfig.webview.json --threshold error",
     "smoke": "npm run build && node tools/vscode-smoke.mjs",
     "smoke:vsix": "npm run package && node tools/vscode-smoke.mjs --vsix",
-    "package": "npm run typecheck && node esbuild.mjs --production && vsce package --no-dependencies --no-rewrite-relative-links",
-    "publish:marketplace": "vsce publish --no-dependencies --no-rewrite-relative-links",
+    "package": "npm run typecheck && node esbuild.mjs --production && vsce package --no-dependencies",
+    "publish:marketplace": "node tools/publish-marketplace.mjs",
     "publish:openvsx": "ovsx publish --no-dependencies"
   },
   "devDependencies": {

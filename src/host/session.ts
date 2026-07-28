@@ -33,6 +33,7 @@ import type {
   ModelInfo,
   NoticeBlock,
   PermissionMode,
+  SetupHint,
   PromptImage,
   QuestionResponse,
   QueuedMessage,
@@ -354,6 +355,7 @@ export class GrokSession implements vscode.Disposable {
     const s = settings()
     this.status.agentState = 'starting'
     this.status.error = undefined
+    this.status.setupHint = undefined
     this.pushStatus()
 
     const client = new AcpClient({
@@ -425,10 +427,13 @@ export class GrokSession implements vscode.Disposable {
         err instanceof RpcError
           ? `${err.rpc.message} (code ${err.rpc.code})`
           : (err as Error).message
+      this.deps.log(`agent start failed: ${message}`)
       this.status.agentState = 'stopped'
-      this.status.error = message
+      this.status.setupHint = classifyStartFailure(message, s.cliPath)
+      // Short line for the status strip — full technical text stays in the log / setup card.
+      this.status.error = this.status.setupHint.title
       this.pushStatus()
-      this.addNotice('error', `Could not start grok: ${message}`)
+      // No raw stack notice in chat — Setup card is the recovery path.
       client.dispose()
       this.client = undefined
       throw err
@@ -436,6 +441,7 @@ export class GrokSession implements vscode.Disposable {
 
     this.status.agentState = 'idle'
     this.status.error = undefined
+    this.status.setupHint = undefined
     this.pushStatus()
     this.deps.log(
       `session ready: ${this.sessionId} (grok ${this.status.agentVersion ?? '?'})`,
@@ -2747,6 +2753,62 @@ function mergeToolPayload(
           },
         }
       : prev._meta,
+  }
+}
+
+const GROK_INSTALL_URL = 'https://grok.x.ai/'
+
+/**
+ * Turn a spawn/RPC failure into a recovery card. Raw OS / RPC text stays in the protocol log.
+ */
+function classifyStartFailure(message: string, cliPath: string): SetupHint {
+  const m = message.toLowerCase()
+  const missingCli =
+    /enoent|spawn .*enoent|not recognized as an internal|is not recognized|command not found|cannot find|failed to start .*enoent|no such file or directory/i.test(
+      message,
+    ) ||
+    (/failed to start/i.test(m) && /enoent|not found|not recognized/i.test(m))
+
+  if (missingCli) {
+    return {
+      kind: 'missing-cli',
+      title: 'Grok Build CLI not found',
+      detail:
+        `This unofficial chat UI needs xAI’s Grok Build CLI on your machine.\n\n` +
+        `1. Install and sign in from the official site\n` +
+        `2. Confirm \`grok\` works in a terminal (or set grokBuild.cliPath)\n` +
+        `3. Click Retry below\n\n` +
+        `Looking for: ${cliPath}`,
+      installUrl: GROK_INSTALL_URL,
+    }
+  }
+
+  if (
+    /auth|login|unauthori|api.?key|not authenticated|token expired|please (log|sign) in|sign.in/i.test(
+      m,
+    )
+  ) {
+    return {
+      kind: 'not-authenticated',
+      title: 'Sign in to Grok',
+      detail:
+        `The CLI is installed but not authenticated.\n\n` +
+        `Run \`grok\` once in a terminal to sign in, then click Retry.\n` +
+        `This extension is only a client UI — accounts and billing stay with xAI.`,
+      installUrl: GROK_INSTALL_URL,
+    }
+  }
+
+  const short =
+    message.length > 160 ? `${message.slice(0, 140).trim()}…` : message
+  return {
+    kind: 'start-failed',
+    title: 'Could not start Grok',
+    detail:
+      `${short}\n\n` +
+      `This is an unofficial community extension. You still need a working, authenticated ` +
+      `Grok Build CLI. Install docs: ${GROK_INSTALL_URL}`,
+    installUrl: GROK_INSTALL_URL,
   }
 }
 

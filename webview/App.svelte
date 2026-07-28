@@ -493,6 +493,7 @@
         cwd={status.cwd}
         {revision}
         agentState={status.agentState}
+        setupHint={status.setupHint}
         loadingHistory={status.loadingHistory}
         bind:jumpVisible
         onJumpReady={(api) => {

@@ -77,8 +77,11 @@
   {#if status.agentVersion}<span class="ver" title="Grok Build CLI">{status.agentVersion}</span>{/if}
 </div>
 
-{#if status.error}
+{#if status.error && !status.setupHint}
+  <!-- When setupHint is set, the Setup card owns the message — avoid a second dump here. -->
   <div class="error" title={status.error}>{status.error}</div>
+{:else if status.setupHint}
+  <div class="error soft" title={status.setupHint.detail}>{status.setupHint.title} — see setup below</div>
 {/if}
 
 <style>
@@ -234,5 +237,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .error.soft {
+    border-bottom-color: var(--gb-warn);
+    background: color-mix(in srgb, var(--gb-warn) 12%, transparent);
+    color: var(--vscode-foreground);
   }
 </style>

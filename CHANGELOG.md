@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editor integration: unsaved buffer reads, workspace-edit writes, real terminals
 - Protocol log channel with secret redaction
 - Soft cloud / binary path hints for agent file I/O (no hard block)
-- Webview UI harness and ACP probe tools for development
+- **Setup card** when the CLI is missing or not signed in (link to grok.x.ai + Retry)
+- First public Marketplace listing: `sr-web-studio.grok-build-unofficial`
 
 ### Fixed
 
@@ -36,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reload resumes the **last real session** instead of minting a blank untitled every time
 - Tool cards wait for path/args before paint (no empty `READ` flash); failures show short human lines, not stack dumps
 - User image thumbs keep aspect ratio; attachment path notes stay out of the user bubble
-- Working/status ellipsis no longer shoves the rest of the status line
+- Status-line busy cue no longer shoves session title / folder
 
 ### Notes
 

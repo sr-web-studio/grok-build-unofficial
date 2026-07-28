@@ -291,7 +291,22 @@ export interface UiStatus {
    * auto-scroll thrash until a single full state flush arrives.
    */
   loadingHistory?: boolean
+  /** Short status-line error; prefer `setupHint` for missing-CLI / auth guidance. */
   error?: string
+  /**
+   * Friendly setup card when the agent cannot start (CLI missing, not signed in, etc.).
+   * Cleared automatically once `ensureStarted` succeeds.
+   */
+  setupHint?: SetupHint
+}
+
+/** User-facing recovery for a stopped agent that needs install / auth / retry. */
+export interface SetupHint {
+  kind: 'missing-cli' | 'not-authenticated' | 'start-failed'
+  title: string
+  detail: string
+  /** Official install / product page (open in external browser). */
+  installUrl?: string
 }
 
 export interface UiState {
@@ -420,3 +435,5 @@ export type WebviewMessage =
   /** Open ~/.grok/config.toml — the CLI's own settings file, which we never parse ourselves. */
   | { type: 'openUserConfig' }
   | { type: 'toggleThinking'; show: boolean }
+  /** Open an https URL in the system browser (install docs, etc.). */
+  | { type: 'openExternal'; url: string }

@@ -21,15 +21,16 @@ config.
 
 ## Project layout
 
-| Path | Role |
-| --- | --- |
-| `src/extension.ts` | Activation, commands |
-| `src/acp/` | JSON-RPC client, spawn, wire types |
-| `src/host/` | Session state machine, panel, permissions, bridges |
-| `src/shared/protocol.ts` | Host ↔ webview message contract |
-| `webview/` | Svelte 5 UI |
-| `tools/` | ACP probes, smoke test, webview harness |
-| `docs/acp-findings.md` | Protocol notes from live probes |
+| Path                     | Role                                                               |
+| ------------------------ | ------------------------------------------------------------------ |
+| `src/extension.ts`       | Activation, commands                                               |
+| `src/acp/`               | JSON-RPC client, spawn, wire types                                 |
+| `src/host/`              | Session state machine, panel, permissions, bridges                 |
+| `src/shared/protocol.ts` | Host ↔ webview message contract                                    |
+| `webview/`               | Svelte 5 UI                                                        |
+| `tools/`                 | ACP probes, smoke test, webview harness, maintainer publish script |
+| `docs/acp-findings.md`   | Protocol notes from live probes                                    |
+| `docs/PUBLISHING.md`     | Marketplace / Open VSX release notes                               |
 
 ## Guidelines
 
@@ -37,7 +38,8 @@ config.
 2. Prefer typed messages in `src/shared/protocol.ts` over ad-hoc IPC.
 3. Re-run or extend `tools/probe-methods.mjs` when adding new `_x.ai/*` calls after a CLI upgrade.
 4. **Never commit** `recordings/`, `*.vsix`, `.env`, or anything under `~/.grok/`.
-5. Match existing style in the file you touch (this tree has evolved; don’t reformat whole files).
+5. Match existing style in the file you touch — don’t reformat whole files for taste.
+6. User-facing errors stay short; technical detail belongs in the Output log.
 
 ## Checks before a PR
 

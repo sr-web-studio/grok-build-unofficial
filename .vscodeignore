@@ -27,9 +27,10 @@ yarn.lock
 # Raw ACP wire captures: machine paths and prompt content. Must never leave this machine.
 recordings/**
 
-# Local secrets, in case one ever lands here
+# Local secrets — never ship
 .dev.vars
 .env
+.env.*
 
 # Source maps: useful in the dev host, dead weight (and full of local paths) in a shipped vsix
 **/*.map

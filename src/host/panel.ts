@@ -199,7 +199,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         try {
           await this.session.restart()
         } catch {
-          // start() already reported it in the transcript
+          // start() already set setupHint / status for the UI
         }
         return
       case 'showLog':
@@ -212,6 +212,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           .getConfiguration('grokBuild')
           .update('showThinking', msg.show, vscode.ConfigurationTarget.Global)
         return
+      case 'openExternal': {
+        const raw = msg.url?.trim() ?? ''
+        if (!/^https?:\/\//i.test(raw)) return
+        await vscode.env.openExternal(vscode.Uri.parse(raw))
+        return
+      }
       default: {
         const exhaustive: never = msg
         void exhaustive

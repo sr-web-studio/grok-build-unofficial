@@ -1,87 +1,73 @@
-# Publishing guide
+# Publishing
 
-How SR Web Studio ships **Grok Build (unofficial)** to the public.
+How **SR Web Studio** ships **Grok Build (unofficial)** (`sr-web-studio.grok-build-unofficial`).
 
-## Prerequisites (one-time)
+## One-time setup
 
-### 1. GitHub
+### GitHub
 
-- Org: [sr-web-studio](https://github.com/sr-web-studio)
-- Repo: `grok-build-unofficial` (public)
-- To push `.github/workflows/*`, the `gh` / git token needs the **`workflow`** scope:
+- Repo: [sr-web-studio/grok-build-unofficial](https://github.com/sr-web-studio/grok-build-unofficial)
+- Optional CI secrets:
+  - `VSCE_PAT` — Azure DevOps PAT, **Marketplace → Manage**, **All accessible organizations**
+  - `OVSX_PAT` — [Open VSX](https://open-vsx.org/) token
 
-  ```bash
-  gh auth refresh -h github.com -s repo,workflow,read:org
-  ```
+The Microsoft identity behind `VSCE_PAT` must be an **Owner** of the Marketplace publisher (MSA vs Azure AD dual IDs are common — add the DevOps subject as Owner if publish returns Access Denied).
 
-- Secrets for CI (optional but recommended):
-  - `VSCE_PAT` — Azure DevOps PAT with **Marketplace → Manage**
-  - `OVSX_PAT` — Open VSX personal access token
+### VS Code Marketplace
 
-### 2. Visual Studio Marketplace
+1. [Publisher management](https://marketplace.visualstudio.com/manage) → publisher **`sr-web-studio`**
+2. PAT: [https://dev.azure.com/sr-web-studio/\_usersSettings/tokens](https://dev.azure.com/sr-web-studio/_usersSettings/tokens)  
+   Scope: **Marketplace → Manage**, Organization: **All accessible organizations**
+3. Local: copy [`.env.example`](../.env.example) → `.env` and set `VSCE_PAT` (never commit `.env`)
 
-1. Open [Publisher Management](https://marketplace.visualstudio.com/manage).
-2. Create or open publisher **`srwebstudio`** (must match `package.json` → `publisher`).
-3. Create an Azure DevOps org if needed → User settings → Personal access tokens →
-   **Marketplace (Manage)**.
-4. First publish can take hours for review. Keep the listing disclaimer (“unofficial / not
-   affiliated with xAI”) visible.
+### Open VSX
 
-### 3. Open VSX
-
-1. Sign in at [open-vsx.org](https://open-vsx.org/).
-2. Claim the **`srwebstudio`** namespace (may require Eclipse Foundation verification).
-3. Create an access token for `ovsx publish`.
+1. [open-vsx.org](https://open-vsx.org/) → claim namespace **`sr-web-studio`** if needed
+2. Create a token → `OVSX_PAT` or local env
 
 ## Versioning
 
-- Bump `package.json` `version` and add a `CHANGELOG.md` section.
-- Tag `vX.Y.Z` matching that version (e.g. `v0.1.0`).
-- Prefer [semver](https://semver.org/): protocol-breaking workarounds → minor; security fixes → patch.
+1. Bump `package.json` `version`
+2. Update `CHANGELOG.md`
+3. Commit, then tag `vX.Y.Z` matching the version
 
 ## Local package
 
 ```bash
 npm ci
 npm run package
-# → grok-build-unofficial-0.1.0.vsix
-```
-
-Install locally:
-
-```bash
-code --install-extension grok-build-unofficial-0.1.0.vsix
+# → grok-build-unofficial-<version>.vsix
+code --install-extension grok-build-unofficial-<version>.vsix
 ```
 
 ## Manual publish
 
 ```bash
-# Marketplace
-npx @vscode/vsce login srwebstudio
+# Marketplace (reads VSCE_PAT from .env, never prints it)
 npm run publish:marketplace
-# or: npx @vscode/vsce publish -p "$VSCE_PAT" --no-dependencies --no-rewrite-relative-links
+# → https://marketplace.visualstudio.com/items?itemName=sr-web-studio.grok-build-unofficial
 
-# Open VSX (after Marketplace or from the same .vsix)
-npx ovsx publish grok-build-unofficial-0.1.0.vsix -p "$OVSX_PAT"
+# Open VSX
+npx ovsx publish grok-build-unofficial-*.vsix -p "$OVSX_PAT"
 ```
 
 ## Tag-driven release (CI)
 
-Pushing a tag `v*` runs `.github/workflows/release.yml`:
+Pushing tag `v*` runs [`.github/workflows/release.yml`](../.github/workflows/release.yml):
 
-1. `npm ci` → typecheck → package `.vsix`
-2. Create a GitHub Release and attach the VSIX
-3. Publish to Marketplace and Open VSX when the secrets are set
+1. Typecheck + package `.vsix`
+2. GitHub Release + attach VSIX
+3. Marketplace / Open VSX when secrets are set
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 ## Listing checklist
 
-- [ ] `icon` 128×128 PNG, `repository` / `bugs` / `homepage` set
-- [ ] README opens with unofficial disclaimer + CLI requirement
-- [ ] CHANGELOG entry for the version
-- [ ] Smoke on a clean profile: missing `grok` shows a clear error; happy path with auth works
-- [ ] Marketplace + Open VSX + GitHub Release all point at the same version
+- [ ] Version + CHANGELOG match
+- [ ] Icon 128×128, repository / bugs / homepage set
+- [ ] README disclaimer + CLI requirement visible
+- [ ] Smoke: missing CLI shows setup card; authenticated happy path works
+- [ ] Marketplace (and Open VSX if used) show the same version
