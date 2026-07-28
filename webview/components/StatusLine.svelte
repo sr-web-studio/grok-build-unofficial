@@ -38,8 +38,15 @@
 
 <div class="status" class:busy>
   <span class="state {status.agentState}">●</span>
-  <span class="label">
-    {stateLabel[status.agentState]}{#if busy}<span class="ellipsis" aria-hidden="true"></span>{/if}
+  <!--
+    State label is a fixed-width slot. The old ''→.→..→… animation changed glyph width every
+    frame and shoved session title / folder left-right for the whole turn.
+  -->
+  <span class="label" data-state={status.agentState}>
+    <span class="label-text">{stateLabel[status.agentState]}</span>
+    {#if busy}
+      <span class="ellipsis" aria-hidden="true"><i></i><i></i><i></i></span>
+    {/if}
   </span>
 
   {#if status.sessionTitle}
@@ -114,30 +121,61 @@
     animation: pulse 1.4s ease-in-out infinite;
   }
 
+  .label {
+    display: inline-flex;
+    align-items: baseline;
+    flex: 0 0 auto;
+    /* Widest label is "waiting for you" — reserve so state flips do not shove the title. */
+    min-width: 12.5ch;
+  }
+
   .status.busy .label {
     color: var(--gb-accent);
     font-weight: 700;
   }
 
-  /* Animated "…" so the top bar also reads as live during quiet model pauses. */
-  .ellipsis::after {
-    content: '';
-    animation: ellipsis-steps 1.2s steps(4, end) infinite;
+  .label-text {
+    flex: 0 0 auto;
   }
 
-  @keyframes ellipsis-steps {
-    0% {
-      content: '';
-    }
-    25% {
-      content: '.';
-    }
-    50% {
-      content: '..';
-    }
-    75%,
+  /*
+   * Three fixed dots — opacity only. Never change the string width (that was the shove).
+   */
+  .ellipsis {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    width: 1.1em;
+    margin-left: 1px;
+    flex: 0 0 auto;
+  }
+
+  .ellipsis i {
+    display: block;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.25;
+    animation: ellipsis-dot 1.2s ease-in-out infinite;
+  }
+
+  .ellipsis i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  .ellipsis i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+
+  @keyframes ellipsis-dot {
+    0%,
+    80%,
     100% {
-      content: '...';
+      opacity: 0.25;
+    }
+    40% {
+      opacity: 1;
     }
   }
 

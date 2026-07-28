@@ -61,6 +61,11 @@
     ],
     arrowDown: ['M12 5v14', 'm19 12-7 7-7-7'],
     send: ['m22 2-7 20-4-9-9-4z'],
+    // Lucide "copy" — two stacked rects (path form for the single-path renderer).
+    copy: [
+      'M8 8h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2',
+      'M16 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2',
+    ],
   } as const;
 
   export type IconName = keyof typeof icons;

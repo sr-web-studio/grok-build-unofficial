@@ -182,12 +182,17 @@ export class GrokSession implements vscode.Disposable {
 
   private readonly toolBlocks = new Map<string, ToolBlock>()
   /**
-   * Early `tool_call_delta_chunk` seeds held briefly so the card can paint once with
-   * name+args (tool_call) instead of morphing SEARCH → SEARCH query → multiline.
+   * Early tool signals held until there is something worth showing (path, command, …).
+   * Prevents the empty "READ" flash before "READ file.txt".
    */
   private readonly toolHolds = new Map<
     string,
-    { name?: string; timer?: ReturnType<typeof setTimeout> }
+    {
+      name?: string
+      /** Latest payload while we wait for a displayable target. */
+      payload?: ToolCallUpdatePayload
+      timer?: ReturnType<typeof setTimeout>
+    }
   >()
   private readonly terminalToBlock = new Map<string, string>()
   private lastExecuteBlockId: string | undefined
@@ -1836,6 +1841,15 @@ export class GrokSession implements vscode.Disposable {
         }
         const seedName =
           xaiName || this.toolHolds.get(p.toolCallId)?.name || undefined
+        // Live turns: do not mint a bare "Read" card — wait for path/args (or terminal status).
+        if (
+          !this.replayingHistory &&
+          !this.toolBlocks.has(p.toolCallId) &&
+          !toolPayloadReady(p)
+        ) {
+          this.bufferToolUpdate(p.toolCallId, p, seedName)
+          return
+        }
         this.releaseToolHold(p.toolCallId)
         const block = this.ensureToolBlock(p.toolCallId, {
           name: seedName,
@@ -1933,8 +1947,8 @@ export class GrokSession implements vscode.Disposable {
   }
 
   /**
-   * Defer painting a bare name-only tool card. History replay paints immediately so order stays
-   * faithful; live turns wait for tool_call (full args) or a short fallback.
+   * Delta only — remember the name, never paint. The card appears on the first tool_call that
+   * carries a target (or after a last-resort timeout so a stuck tool is not invisible forever).
    */
   private holdToolReveal(toolCallId: string, name?: string): void {
     if (this.toolBlocks.has(toolCallId)) {
@@ -1954,22 +1968,44 @@ export class GrokSession implements vscode.Disposable {
       this.ensureToolBlock(toolCallId, { name })
       return
     }
-    const existing = this.toolHolds.get(toolCallId)
-    if (existing) {
-      if (name) existing.name = name
-      return
+    this.bufferToolUpdate(toolCallId, undefined, name)
+  }
+
+  /** Merge a partial update into the hold and (re)arm the last-resort reveal timer. */
+  private bufferToolUpdate(
+    toolCallId: string,
+    payload: ToolCallUpdatePayload | undefined,
+    name?: string,
+  ): void {
+    let hold = this.toolHolds.get(toolCallId)
+    if (!hold) {
+      hold = {}
+      this.toolHolds.set(toolCallId, hold)
     }
-    const hold: { name?: string; timer?: ReturnType<typeof setTimeout> } = {
-      name,
-    }
-    // ~140ms is under a human "tick" but usually enough for tool_call + input to land together.
-    hold.timer = setTimeout(() => {
-      this.toolHolds.delete(toolCallId)
-      if (!this.toolBlocks.has(toolCallId)) {
-        this.ensureToolBlock(toolCallId, { name: hold.name })
+    if (name) hold.name = name
+    if (payload) {
+      hold.payload = mergeToolPayload(hold.payload, payload)
+      const xaiName = payload._meta?.['x.ai/tool']?.name
+      if (xaiName) hold.name = xaiName
+      // Ready mid-buffer (args arrived) — paint immediately with the merged payload.
+      if (toolPayloadReady(hold.payload)) {
+        this.flushToolHold(toolCallId)
+        return
       }
-    }, 140)
-    this.toolHolds.set(toolCallId, hold)
+    }
+    if (hold.timer) clearTimeout(hold.timer)
+    // Last resort only: better a late bare card than a missing one if the agent never sends args.
+    hold.timer = setTimeout(() => this.flushToolHold(toolCallId), 700)
+  }
+
+  private flushToolHold(toolCallId: string): void {
+    const hold = this.toolHolds.get(toolCallId)
+    if (!hold) return
+    if (hold.timer) clearTimeout(hold.timer)
+    this.toolHolds.delete(toolCallId)
+    if (this.toolBlocks.has(toolCallId)) return
+    const block = this.ensureToolBlock(toolCallId, { name: hold.name })
+    if (hold.payload) this.applyToolPayload(block, hold.payload)
   }
 
   private releaseToolHold(toolCallId: string): void {
@@ -2031,9 +2067,16 @@ export class GrokSession implements vscode.Disposable {
     if (p.title) patch.title = p.title
     if (p.status) patch.status = p.status
     if (p.locations) patch.locations = p.locations
-    if (p.content) patch.contents = mergeContents(block.contents, p.content)
-    if (p.status === 'failed')
-      patch.error = firstText(p.content) ?? 'Tool failed.'
+    if (p.status === 'failed') {
+      // Full stack / ENOENT dumps stay in the log; the card gets a short human line only.
+      const raw =
+        firstText(p.content) ?? firstText(block.contents) ?? 'Tool failed.'
+      this.deps.log(`tool ${block.toolCallId} failed: ${raw.slice(0, 800)}`)
+      patch.error = humanizeToolError(raw)
+      patch.contents = []
+    } else if (p.content) {
+      patch.contents = mergeContents(block.contents, p.content)
+    }
     this.patch(block, patch)
 
     const kind = (patch.toolKind ?? block.toolKind) as string
@@ -2628,6 +2671,135 @@ function mergeContents(
   incoming: ToolCallContent[],
 ): ToolCallContent[] {
   return incoming.length > 0 ? incoming : previous
+}
+
+/**
+ * True when the wire payload has enough for a non-empty card header (path, command, query, …).
+ * Name-only "Read" flashes are what made tool bursts feel artificial.
+ */
+function toolPayloadReady(p: ToolCallUpdatePayload): boolean {
+  if (
+    p.status === 'completed' ||
+    p.status === 'failed' ||
+    p.status === 'cancelled'
+  )
+    return true
+  if (p.locations && p.locations.length > 0) return true
+  if (p.content && p.content.length > 0) return true
+  const input = (p._meta?.['x.ai/tool']?.input ?? p.rawInput) as
+    | Record<string, unknown>
+    | undefined
+  if (input && typeof input === 'object') {
+    for (const key of [
+      'path',
+      'file_path',
+      'filePath',
+      'command',
+      'cmd',
+      'script',
+      'query',
+      'pattern',
+      'regex',
+      'url',
+      'glob',
+      'target',
+    ]) {
+      const v = input[key]
+      if (typeof v === 'string' && v.trim()) return true
+    }
+    // Any non-empty input object counts (unknown tool shapes).
+    if (Object.keys(input).length > 0) return true
+  }
+  // Title like `Read notes.txt` is enough; bare "Read" is not.
+  if (p.title && p.title.trim()) {
+    const t = p.title.trim()
+    const name = p._meta?.['x.ai/tool']?.name
+    const label = stableToolLabel(name, p._meta?.['x.ai/tool']?.label)
+    if (t.toLowerCase() !== label.toLowerCase() && t.length > label.length)
+      return true
+    if (/\s|\//.test(t) || t.includes('\\') || t.includes('`')) return true
+  }
+  return false
+}
+
+/** Shallow-merge successive tool updates while a card is still held off-screen. */
+function mergeToolPayload(
+  prev: ToolCallUpdatePayload | undefined,
+  next: ToolCallUpdatePayload,
+): ToolCallUpdatePayload {
+  if (!prev) return next
+  return {
+    ...prev,
+    ...next,
+    rawInput: next.rawInput ?? prev.rawInput,
+    content: next.content?.length ? next.content : prev.content,
+    locations: next.locations?.length ? next.locations : prev.locations,
+    _meta: next._meta
+      ? {
+          ...prev._meta,
+          ...next._meta,
+          'x.ai/tool': {
+            ...prev._meta?.['x.ai/tool'],
+            ...next._meta['x.ai/tool'],
+            input:
+              next._meta['x.ai/tool']?.input ??
+              prev._meta?.['x.ai/tool']?.input,
+          },
+        }
+      : prev._meta,
+  }
+}
+
+/**
+ * Map raw tool/OS errors to a short chat-safe line. Full text still goes to the Output log.
+ */
+function humanizeToolError(raw: string): string {
+  const s = raw.replace(/\r\n/g, '\n').trim()
+  if (!s) return 'Something went wrong.'
+  const oneLine = s.replace(/\s+/g, ' ')
+
+  if (/ENOENT|no such file or directory|does not exist|not found/i.test(s)) {
+    const base =
+      oneLine.match(/(?:['"`])([^'"`]*[/\\][^'"`]+)(?:['"`])/)?.[1] ||
+      oneLine.match(/([^\s:'"]+\.[A-Za-z0-9]{1,12})\b/)?.[1]
+    if (base) {
+      const name = base.replace(/\\/g, '/').split('/').pop() || base
+      return `Couldn’t find “${name}”.`
+    }
+    return 'File or path not found.'
+  }
+  if (/EACCES|EPERM|permission denied/i.test(s)) return 'Permission denied.'
+  if (/EISDIR/i.test(s)) return 'That path is a folder, not a file.'
+  if (/ENOTDIR/i.test(s)) return 'That path is not a folder.'
+  if (/EEXIST/i.test(s)) return 'Already exists.'
+  if (/ETIMEDOUT|timed out|timeout/i.test(s)) return 'Timed out.'
+  if (/ECONNREFUSED|ENETUNREACH|network/i.test(s)) return 'Network error.'
+  if (/Tool I\/O soft-failure|soft-failure/i.test(s))
+    return 'Couldn’t read that file (path may be missing or unreachable).'
+  if (/is actually a directory/i.test(s))
+    return 'That path is a folder, not a file.'
+
+  // Long dumps / stacks — never put them in the bubble.
+  if (
+    oneLine.length > 140 ||
+    /\bat\s+\w+|stack trace|Error:\s*Error/i.test(s) ||
+    (s.match(/\n/g) ?? []).length >= 2
+  ) {
+    const first =
+      s
+        .split('\n')
+        .map((l) => l.trim())
+        .find(Boolean) ?? ''
+    if (
+      first.length > 0 &&
+      first.length <= 100 &&
+      !/ENOENT|e:\\|\/home\/|\\Users\\/i.test(first)
+    ) {
+      return first.endsWith('.') ? first : `${first}.`
+    }
+    return 'The tool hit an error. Use View log for details.'
+  }
+  return oneLine
 }
 
 function prettifyToolName(name: string): string {

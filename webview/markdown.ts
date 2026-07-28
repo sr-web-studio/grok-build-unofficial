@@ -132,11 +132,8 @@ function renderMarkdownCore(source: string): string {
       }
       // Unclosed fence (still streaming): keep body as a code block without showing the
       // trailing fence marker — looks like a growing code region, not raw ```.
-      out.push(
-        `<pre class="md-code"${lang ? ` data-lang="${escapeHtml(lang)}"` : ''}><code>${escapeHtml(
-          body.join('\n'),
-        )}</code></pre>`,
-      )
+      // Wrapper + copy control: Markdown.svelte handles clicks via [data-md-copy] delegation.
+      out.push(renderCodeBlock(body.join('\n'), lang))
       continue
     }
 
@@ -267,6 +264,32 @@ export function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/** Lucide-style copy / check paths (inline so {@html} blocks do not need Svelte Icon). */
+const COPY_SVG =
+  '<svg class="md-copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'
+const CHECK_SVG =
+  '<svg class="md-copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'
+
+/**
+ * Fenced code block with a language kicker and a copy control. The button is inert markup;
+ * Markdown.svelte wires clipboard + the brief "Copied" state.
+ */
+function renderCodeBlock(code: string, lang: string): string {
+  const label = lang.trim() || 'code'
+  return (
+    `<div class="md-code-wrap">` +
+    `<div class="md-code-head">` +
+    `<span class="md-code-lang">${escapeHtml(label)}</span>` +
+    `<button type="button" class="md-copy" data-md-copy title="Copy code" aria-label="Copy code">` +
+    `<span class="md-copy-idle">${COPY_SVG}<span class="md-copy-label">Copy</span></span>` +
+    `<span class="md-copy-done" hidden>${CHECK_SVG}<span class="md-copy-label">Copied</span></span>` +
+    `</button>` +
+    `</div>` +
+    `<pre class="md-code"><code>${escapeHtml(code)}</code></pre>` +
+    `</div>`
+  )
 }
 
 /**

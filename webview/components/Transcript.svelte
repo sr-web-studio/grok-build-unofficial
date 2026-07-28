@@ -21,7 +21,6 @@
     autoExpandThinking: boolean;
     cwd?: string;
     revision: number;
-    /** When `thinking`, show a live "still working" cue between sparse tool bursts. */
     agentState: AgentState;
     /** Host is replaying a long session — show a shell, no scroll thrash. */
     loadingHistory?: boolean;
@@ -60,8 +59,7 @@
   let stickyUserId = $state<string | null>(null);
   /** Expanded long user messages by block id. */
   let expandedUsers = $state<Record<string, boolean>>({});
-  /** Sticky bar's own expand toggle when the pinned message is long. */
-  let stickyExpanded = $state(false);
+
 
   /** Collapse long user text in-chat and in the sticky bar (≈3 lines / 160 chars). */
   const COLLAPSE_AT = 160;
@@ -139,10 +137,7 @@
       const eRect = el.getBoundingClientRect();
       if (eRect.bottom < sRect.top + 4) pinned = id;
     }
-    if (pinned !== stickyUserId) {
-      stickyUserId = pinned;
-      stickyExpanded = false;
-    }
+    if (pinned !== stickyUserId) stickyUserId = pinned;
   }
 
   function scrollToBottom() {
@@ -224,23 +219,16 @@
         {#if stickyUserBlock.wasQueued}
           <span class="queue-pill">queued</span>
         {/if}
-        <span class="sticky-text">
-          {#if isLong(stickyUserBlock.text) && !stickyExpanded}
-            {previewText(stickyUserBlock.text)}
-          {:else}
-            {stickyUserBlock.text}
+        {#if stickyUserBlock.images?.length}
+          {@const src = thumb(stickyUserBlock.images[0])}
+          {#if src}
+            <img class="sticky-thumb" src={src} alt="" />
           {/if}
+        {/if}
+        <span class="sticky-text">
+          {stickyUserBlock.text || (stickyUserBlock.images?.length ? 'Image' : '')}
         </span>
       </button>
-      {#if isLong(stickyUserBlock.text)}
-        <button
-          class="sticky-expand"
-          type="button"
-          onclick={() => (stickyExpanded = !stickyExpanded)}
-        >
-          {stickyExpanded ? 'Less' : 'More'}
-        </button>
-      {/if}
     </div>
   {/if}
 
@@ -460,8 +448,8 @@
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
+    align-items: center;
+    flex-wrap: nowrap;
     gap: 6px;
     margin: 0;
     padding: 0;
@@ -473,17 +461,25 @@
     cursor: pointer;
   }
 
+  .sticky-thumb {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    object-fit: cover;
+    border: 1px solid var(--gb-rule);
+    background: var(--gb-surface-sunken);
+  }
+
   .sticky-text {
     flex: 1 1 8em;
     min-width: 0;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    font-size: 0.92em;
-    max-height: 4.5em;
+    /* One line in the pin bar — multi-line pre-wrap made the strip look tall/"stretched". */
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.92em;
   }
 
-  .sticky-expand,
   .expand {
     flex: 0 0 auto;
     margin-left: auto;
@@ -497,7 +493,6 @@
     cursor: pointer;
   }
 
-  .sticky-expand:hover,
   .expand:hover {
     border-color: var(--gb-accent);
   }
@@ -604,16 +599,23 @@
   .imgs {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start; /* default stretch was warping <img> on the cross axis */
     gap: 6px;
     margin-bottom: 6px;
   }
 
   .img {
-    max-width: 100%;
-    max-height: 160px;
+    /* Never force both axes — flex stretch + only max-* made wide screenshots look tall. */
+    display: block;
+    flex: 0 0 auto;
+    width: auto;
+    height: auto;
+    max-width: min(100%, 280px);
+    max-height: 140px;
     border: 1px solid var(--gb-rule);
     border-radius: var(--gb-radius);
     object-fit: contain;
+    object-position: left top;
     background: var(--gb-surface-sunken);
   }
 

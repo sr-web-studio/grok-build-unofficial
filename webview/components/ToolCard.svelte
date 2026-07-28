@@ -46,13 +46,9 @@
   const target = $derived(command ?? (filePath ? shorten(filePath, cwd) : undefined) ?? query ?? '');
 
   const running = $derived(block.status === 'pending' || block.status === 'in_progress');
-  /*
-   * Only failures open themselves now. grok fires tool calls faster than they can be read, and a
-   * self-expanding console for every one of them pushed the conversation off the screen — the
-   * collapsed card carries a one-line tail instead, which is enough to follow along.
-   */
-  const autoOpen = $derived(block.status === 'failed');
-  const open = $derived(manual ?? autoOpen);
+  const failed = $derived(block.status === 'failed');
+  /** Failures stay collapsed — raw dumps used to auto-expand and flood the chat. */
+  const open = $derived(manual ?? false);
 
   const body = $derived(live || output);
   /**
@@ -61,8 +57,10 @@
    * A command is summed up by where it ended, so that gets the last line. A read or a search is
    * summed up by what it found, so those get the first — the last line of a file is usually a
    * lone closing brace, which tells you nothing about what was read.
+   * Failures use the short host-humanized `block.error`, never the stack dump.
    */
   const tail = $derived.by(() => {
+    if (failed) return block.error || 'Failed';
     const lines = body
       .split('\n')
       .map((l) => l.trimEnd())
@@ -74,9 +72,14 @@
    * previews only appear after completion — mid-flight content thrash (empty → first line →
    * multi-line) is what made tool cards feel artificial.
    */
-  const showPeek = $derived(!open && !running && Boolean(diff));
+  const showPeek = $derived(!open && !running && !failed && Boolean(diff));
   const showTail = $derived(!open && !running && !diff && Boolean(tail));
-  const hasBody = $derived(Boolean(diff) || body.length > 0 || Object.keys(input).length > 0);
+  const hasBody = $derived(
+    Boolean(diff) ||
+      body.length > 0 ||
+      Boolean(block.error) ||
+      Object.keys(input).length > 0,
+  );
   const icon = $derived(kindIcons[block.toolKind] ?? 'file');
   /** Terminal output gets the console treatment; anything else stays in the editor's code block. */
   const terminal = $derived(block.toolKind === 'execute');
@@ -150,6 +153,9 @@
 
   {#if open}
     <div class="body">
+      {#if block.error}
+        <div class="err">{block.error}</div>
+      {/if}
       {#if diff}
         <DiffView oldText={diff.oldText} newText={diff.newText} />
       {/if}
@@ -159,14 +165,11 @@
       {#if terminal && command}
         <pre class="cmd">{command}</pre>
       {/if}
-      {#if body}
+      {#if body && !failed}
         <pre class="out" class:terminal>{body}</pre>
       {/if}
-      {#if !diff && !body && Object.keys(input).length > 0}
+      {#if !failed && !diff && !body && Object.keys(input).length > 0}
         <pre class="out dim">{JSON.stringify(input, null, 2)}</pre>
-      {/if}
-      {#if block.error}
-        <div class="err">{block.error}</div>
       {/if}
     </div>
   {/if}
@@ -338,6 +341,10 @@
     text-overflow: ellipsis;
   }
 
+  .tool.failed .tail {
+    color: var(--gb-danger);
+  }
+
   .body {
     display: flex;
     flex-direction: column;
@@ -397,5 +404,7 @@
   .err {
     color: var(--gb-danger);
     font-size: 0.9em;
+    font-weight: 600;
+    line-height: 1.4;
   }
 </style>
