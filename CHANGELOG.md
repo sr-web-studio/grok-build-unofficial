@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-07-28
+
+### Added
+
+- **Slash commands** (`/context`, `/compact`, `/usage`, and other Grok `/` commands) open a **result modal** instead of chat bubbles; queued if a turn is running
+- **Context HUD** colour (ok / warn / hot) with a **Compact** button when pressure is high
+- Live context refresh via `_x.ai/session/info` after turns and session start
+
+### Fixed
+
+- `/compact` shows an immediate progress modal; empty `{}` API payloads no longer appear as raw JSON
+
 ## [0.1.1] — 2026-07-28
 
 ### Fixed
