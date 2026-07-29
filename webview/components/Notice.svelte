@@ -46,9 +46,9 @@
   .card {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    padding: 10px 11px;
-    border: 2px solid var(--gb-danger);
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--gb-danger);
     border-radius: var(--gb-radius);
     background: color-mix(in srgb, var(--gb-danger) 12%, var(--gb-surface));
   }
@@ -56,7 +56,7 @@
   .col {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
     min-width: 0;
     flex: 1 1 auto;
   }
@@ -78,12 +78,13 @@
   .notice {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 6px 9px;
+    gap: 8px;
+    padding: 8px 12px;
     border-radius: var(--gb-radius);
     font-size: 0.92em;
     background: var(--gb-surface);
     border: 1px solid var(--gb-rule);
+    line-height: 1.45;
   }
 
   .notice.warn {

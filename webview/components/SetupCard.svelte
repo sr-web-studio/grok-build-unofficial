@@ -51,10 +51,11 @@
 
 <style>
   .setup {
-    margin: 8px 2px 4px;
-    padding: 14px 14px 12px;
-    border: 2px solid var(--gb-rule-strong);
+    margin: 10px 2px 6px;
+    padding: 16px 16px 14px;
+    border: 1px solid var(--gb-rule-strong);
     border-left: 3px solid var(--gb-accent);
+    border-radius: var(--gb-radius-lg);
     background: var(--gb-surface);
   }
 
@@ -115,8 +116,8 @@
     font: inherit;
     font-size: 12px;
     font-weight: 700;
-    padding: 5px 12px;
-    border-radius: var(--gb-radius);
+    padding: 6px 12px;
+    border-radius: var(--gb-radius-sm);
     cursor: pointer;
   }
 

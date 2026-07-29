@@ -131,7 +131,7 @@
   .header {
     position: relative;
     flex: 0 0 auto;
-    border-bottom: 2px solid var(--gb-rule-strong);
+    border-bottom: 1px solid var(--gb-rule-strong);
   }
 
   .row {
@@ -141,8 +141,8 @@
     /* In a 300px sidebar the dropdowns alone fill the row; let the toolbar drop below them
        instead of overflowing off the right edge where the buttons become unreachable. */
     flex-wrap: wrap;
-    row-gap: 4px;
-    padding: 6px 8px;
+    row-gap: 6px;
+    padding: 8px 10px;
   }
 
   .brand {
@@ -171,8 +171,8 @@
     border: none;
     background: none;
     color: var(--vscode-icon-foreground, var(--vscode-foreground));
-    padding: 5px;
-    border-radius: var(--gb-radius);
+    padding: 6px;
+    border-radius: var(--gb-radius-sm);
     cursor: pointer;
   }
 

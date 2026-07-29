@@ -69,8 +69,10 @@
     flex-direction: column;
     border: 1px solid var(--gb-rule-strong);
     border-left: 3px solid var(--gb-accent);
+    border-radius: var(--gb-radius-lg);
     background: var(--vscode-editor-background, var(--gb-surface));
     box-shadow: var(--gb-shadow);
+    overflow: hidden;
   }
 
   .modal.warn {
@@ -157,12 +159,13 @@
 
   .ok {
     border: 1px solid transparent;
+    border-radius: var(--gb-radius-sm);
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     font: inherit;
     font-size: 12px;
     font-weight: 700;
-    padding: 4px 14px;
+    padding: 5px 14px;
     cursor: pointer;
   }
 

@@ -541,10 +541,10 @@
 <style>
   .composer {
     flex: 0 0 auto;
-    padding: 4px 10px 10px;
+    padding: 8px 12px 12px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
   }
 
   .commands {
@@ -553,6 +553,7 @@
     max-height: 150px;
     overflow-y: auto;
     border: 1px solid var(--gb-rule);
+    border-radius: var(--gb-radius);
     background: var(--gb-surface);
   }
 
@@ -561,7 +562,7 @@
     gap: 8px;
     align-items: baseline;
     text-align: left;
-    padding: 5px 8px;
+    padding: 7px 10px;
     border: none;
     border-bottom: 1px solid var(--gb-rule);
     background: none;
@@ -603,14 +604,16 @@
   .queue {
     border: 1px solid color-mix(in srgb, var(--gb-warn) 55%, var(--gb-rule));
     border-left: 3px solid var(--gb-warn);
+    border-radius: var(--gb-radius);
     background: color-mix(in srgb, var(--gb-warn) 12%, var(--vscode-editor-background));
+    overflow: hidden;
   }
 
   .queue-head {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 8px;
+    padding: 8px 10px;
     border-bottom: 1px solid color-mix(in srgb, var(--gb-warn) 30%, transparent);
   }
 
@@ -666,10 +669,11 @@
   .box {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     border: 1px solid var(--vscode-input-border, var(--gb-rule));
+    border-radius: var(--gb-radius-lg);
     background: var(--vscode-input-background);
-    padding: 7px 8px;
+    padding: 10px 12px;
   }
 
   .box:focus-within {
@@ -679,15 +683,16 @@
   .thumbs {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
   }
 
   .thumb {
     position: relative;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border: 1px solid var(--gb-rule);
+    border-radius: var(--gb-radius-sm);
     overflow: hidden;
     background: var(--gb-surface-sunken);
     flex: 0 0 auto;
@@ -772,9 +777,10 @@
     align-items: center;
     justify-content: center;
     width: 28px;
-    height: 26px;
+    height: 28px;
     padding: 0;
     border: 1px solid var(--vscode-dropdown-border, var(--gb-rule));
+    border-radius: var(--gb-radius-sm);
     background: var(--vscode-dropdown-background);
     color: var(--gb-dim);
     cursor: pointer;
@@ -790,11 +796,11 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 5px;
-    row-gap: 5px;
-    padding: 2px 0 0;
-    border-top: 2px solid var(--gb-rule-strong);
-    padding-top: 7px;
+    gap: 6px;
+    row-gap: 6px;
+    padding: 4px 0 0;
+    border-top: 1px solid var(--gb-rule);
+    padding-top: 10px;
   }
 
   .toolbar.warn {
@@ -816,10 +822,11 @@
     background: var(--vscode-dropdown-background);
     color: var(--vscode-dropdown-foreground);
     border: 1px solid var(--vscode-dropdown-border, var(--gb-rule));
+    border-radius: var(--gb-radius-sm);
     font: inherit;
     font-size: var(--gb-kicker-size);
     font-weight: 700;
-    padding: 4px 7px;
+    padding: 5px 9px;
     cursor: pointer;
   }
 
@@ -848,8 +855,9 @@
   button.send,
   button.stop,
   button.restart {
-    padding: 4px 14px;
+    padding: 5px 14px;
     border: 1px solid transparent;
+    border-radius: var(--gb-radius-sm);
     font: inherit;
     font-size: 12px;
     font-weight: 800;

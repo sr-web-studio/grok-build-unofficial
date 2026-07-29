@@ -43,7 +43,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: 11px;
-    padding-top: 6px;
+    /* Match stack rhythm so the usage strip doesn’t sit tighter than tool cards. */
+    padding-top: 10px;
+    margin-top: 2px;
     border-top: 1px solid var(--gb-rule);
     font-size: var(--gb-meta-size);
     color: var(--gb-dim);

@@ -135,8 +135,8 @@
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
+    gap: 8px;
+    padding: 7px 12px;
     border-bottom: 1px solid var(--gb-rule);
     font-size: var(--gb-meta-size);
     color: var(--gb-dim);
@@ -293,9 +293,9 @@
   .ctx {
     flex: 0 0 auto;
     margin: 0;
-    padding: 1px 6px;
+    padding: 2px 8px;
     border: 1px solid transparent;
-    border-radius: var(--gb-radius);
+    border-radius: 999px;
     background: none;
     font: inherit;
     font-family: var(--gb-mono);
@@ -328,9 +328,9 @@
   .compact-btn {
     flex: 0 0 auto;
     margin: 0;
-    padding: 1px 7px;
+    padding: 2px 9px;
     border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
+    border-radius: 999px;
     background: none;
     font: inherit;
     font-size: 10px;

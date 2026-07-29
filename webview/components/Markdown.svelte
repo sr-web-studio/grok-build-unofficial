@@ -70,13 +70,17 @@
 <div class="md" bind:this={root}>{@html html}</div>
 
 <style>
+  /*
+   * Assistant prose needs more air than card chrome — sidebar chats read dense at 1.5/0.6em.
+   * Aim for Claude-like open paragraphs without blowing the narrow column.
+   */
   .md {
-    line-height: 1.5;
+    line-height: 1.72;
     overflow-wrap: anywhere;
   }
 
   .md :global(p) {
-    margin: 0 0 0.6em;
+    margin: 0 0 1.2em;
   }
 
   .md :global(p:last-child) {
@@ -89,42 +93,61 @@
   .md :global(h4),
   .md :global(h5),
   .md :global(h6) {
-    margin: 0.9em 0 0.4em;
+    margin: 1.55em 0 0.65em;
     font-size: 1em;
-    /* The system's headings are heavy and tight, not merely semibold. */
     font-weight: 800;
     letter-spacing: -0.01em;
+    line-height: 1.4;
+  }
+
+  .md :global(h1:first-child),
+  .md :global(h2:first-child),
+  .md :global(h3:first-child),
+  .md :global(h4:first-child),
+  .md :global(h5:first-child),
+  .md :global(h6:first-child) {
+    margin-top: 0.2em;
   }
 
   .md :global(h1) {
-    font-size: 1.15em;
+    font-size: 1.2em;
   }
 
   .md :global(h2) {
-    font-size: 1.08em;
+    font-size: 1.12em;
   }
 
   .md :global(ul),
   .md :global(ol) {
-    margin: 0 0 0.6em;
-    padding-left: 1.35em;
+    margin: 0 0 1.2em;
+    padding-left: 1.5em;
   }
 
   .md :global(li) {
-    margin: 0.15em 0;
+    margin: 0.5em 0;
+    line-height: 1.65;
+  }
+
+  .md :global(li > p) {
+    margin: 0.4em 0;
+  }
+
+  .md :global(li > ul),
+  .md :global(li > ol) {
+    margin: 0.4em 0 0.55em;
   }
 
   .md :global(code) {
     font-family: var(--gb-mono);
     font-size: 0.92em;
     background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius);
-    padding: 0.1em 0.3em;
+    border-radius: var(--gb-radius-sm);
+    padding: 0.15em 0.4em;
   }
 
   /* Fenced block: head (lang + copy) over a sunken pre — same chrome as Copilot/Claude. */
   .md :global(.md-code-wrap) {
-    margin: 0.5em 0;
+    margin: 1.2em 0;
     border: 1px solid var(--gb-rule);
     border-radius: var(--gb-radius);
     background: var(--gb-surface-sunken);
@@ -135,8 +158,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 28px;
-    padding: 0 6px 0 9px;
+    min-height: 32px;
+    padding: 0 8px 0 12px;
     border-bottom: 1px solid var(--gb-rule);
     background: color-mix(in srgb, var(--vscode-editor-background) 55%, var(--gb-surface-sunken));
   }
@@ -161,9 +184,9 @@
     align-items: center;
     gap: 4px;
     margin: 0;
-    padding: 3px 7px;
+    padding: 4px 8px;
     border: 1px solid transparent;
-    border-radius: var(--gb-radius);
+    border-radius: var(--gb-radius-sm);
     background: none;
     color: var(--gb-dim);
     font: inherit;
@@ -203,7 +226,7 @@
 
   .md :global(pre.md-code) {
     margin: 0;
-    padding: 8px 9px;
+    padding: 14px 16px;
     background: transparent;
     border: none;
     border-radius: 0;
@@ -213,7 +236,7 @@
     background: none;
     padding: 0;
     font-size: 0.9em;
-    line-height: 1.45;
+    line-height: 1.65;
     /* Same reasoning as the diff rows: sideways scrolling inside a narrow sidebar hides code
        instead of presenting it. pre-wrap keeps indentation, anywhere breaks unbreakable tokens. */
     white-space: pre-wrap;
@@ -221,21 +244,21 @@
   }
 
   .md :global(blockquote) {
-    margin: 0.5em 0;
-    padding-left: 9px;
-    border-left: 2px solid var(--vscode-textBlockQuote-border, var(--gb-rule));
+    margin: 1.2em 0;
+    padding: 0.45em 0 0.45em 14px;
+    border-left: 3px solid var(--vscode-textBlockQuote-border, var(--gb-rule));
     color: var(--gb-dim);
+    line-height: 1.65;
   }
 
   .md :global(a) {
     color: var(--gb-accent);
   }
 
-  /* A rule in the body is a section break, so it carries the system's 2px weight. */
   .md :global(hr) {
     border: none;
-    border-top: 2px solid var(--gb-rule);
-    margin: 0.8em 0;
+    border-top: 1px solid var(--gb-rule);
+    margin: 1.45em 0;
   }
 
   .md :global(strong) {
@@ -243,29 +266,27 @@
   }
 
   /*
-   * A table in a 300px sidebar cannot be made to fit, so it is allowed to scroll sideways inside
-   * its own box rather than stretching the transcript. The header row carries the system's
-   * uppercase weight; the rules are hairlines so a wide table does not read as a grid of boxes.
+   * Tables scroll sideways in a narrow sidebar. Roomier cells so summary tables breathe.
    */
   .md :global(table) {
     display: block;
     width: max-content;
     max-width: 100%;
     overflow-x: auto;
-    margin: 0.6em 0;
+    margin: 1.2em 0 1.35em;
     border: 1px solid var(--gb-rule);
     border-radius: var(--gb-radius);
     border-collapse: collapse;
     font-size: 0.95em;
+    line-height: 1.5;
   }
 
   .md :global(th),
   .md :global(td) {
-    padding: 4px 8px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--gb-rule);
     text-align: left;
     vertical-align: top;
-    /* Cells wrap only where they must — a table reads badly one word per line. */
     overflow-wrap: normal;
   }
 

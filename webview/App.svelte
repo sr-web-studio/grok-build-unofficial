@@ -555,21 +555,27 @@
 
 <style>
   /*
-   * The token layer for the whole webview.
+   * Shared design tokens for the webview.
    *
-   * esbuild-svelte is configured with `css: 'injected'`, so a standalone stylesheet would never
-   * be linked — the shared tokens have to live in a component, and the root is the one component
-   * guaranteed to be mounted.
-   *
-   * The design is Modernist: zero radius, 2px section rules, uppercase 800-weight kickers, flush
-   * left labels, monospace metadata. Its geometry is kept verbatim; its palette is not. A fixed
-   * light-red-on-white scheme would fight every dark and high-contrast theme the sidebar can be
-   * dropped into, so every colour resolves from `var(--vscode-*)` and red is reserved for its
-   * conventional editor meaning — deletions, danger and errors.
+   * esbuild-svelte injects component CSS, so tokens live on :root here (always mounted).
+   * Soft radius + roomy gaps (Claude-like comfort) while staying theme-aware via --vscode-*.
+   * Danger/warn/ok keep conventional editor meanings.
    */
   :global(:root) {
-    --gb-radius: 0px;
-    --gb-gap: 6px;
+    --gb-radius: 6px;
+    --gb-radius-sm: 4px;
+    --gb-radius-lg: 8px;
+    --gb-gap: 8px;
+    --gb-gap-tight: 5px;
+    --gb-space: 10px;
+    --gb-space-lg: 14px;
+    /*
+     * Transcript vertical rhythm — margins only (not flex gap + margin).
+     * stack-gap: between tools / thoughts / notices.
+     * stack-turn: You↔Grok turn boundaries only.
+     */
+    --gb-stack-gap: 8px;
+    --gb-stack-turn: 12px;
 
     --gb-rule: var(--vscode-widget-border, rgba(128, 128, 128, 0.28));
     --gb-rule-strong: var(--vscode-panel-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.45)));
@@ -590,7 +596,7 @@
     --gb-kicker-size: 11px;
     --gb-meta-size: 11px;
 
-    --gb-shadow: 0 4px 14px rgba(0, 0, 0, 0.36);
+    --gb-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
   }
 
   /* The webview host gives us theme variables but no base styling, so set it once here. */
@@ -616,7 +622,8 @@
   /* Never a browser default ring — the design asks for a 2px offset outline everywhere. */
   :global(:focus-visible) {
     outline: 2px solid var(--vscode-focusBorder);
-    outline-offset: 1px;
+    outline-offset: 2px;
+    border-radius: var(--gb-radius-sm);
   }
 
   :global(::selection) {
@@ -802,27 +809,27 @@
   .popover {
     position: absolute;
     top: 100%;
-    left: 6px;
-    right: 6px;
+    left: 8px;
+    right: 8px;
     z-index: 20;
     max-height: 65vh;
     overflow-y: auto;
     background: var(--vscode-menu-background, var(--gb-surface));
     border: 1px solid var(--vscode-menu-border, var(--gb-rule-strong));
-    border-radius: var(--gb-radius);
+    border-radius: var(--gb-radius-lg);
     box-shadow: var(--gb-shadow);
   }
 
   .panel {
-    padding: 7px 8px 8px;
+    padding: 10px 12px 12px;
   }
 
   .panel-head {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     color: var(--gb-dim);
-    margin-bottom: 4px;
+    margin-bottom: 8px;
   }
 
   .panel-head span {

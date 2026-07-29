@@ -414,11 +414,11 @@
     flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
-    /* Room for the Latest chip only — Working lives in App chrome under the chat. */
-    padding: 10px 10px 48px;
+    /* Room for the Latest chip. Vertical rhythm via .row margins only (no gap+margin). */
+    padding: 14px 12px 52px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
   }
 
   .scroller.dimmed {
@@ -439,15 +439,15 @@
     z-index: 5;
     display: flex;
     align-items: flex-start;
-    gap: 6px;
-    padding: 6px 10px;
+    gap: 8px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--gb-rule);
     background: color-mix(
       in srgb,
       var(--gb-accent) 14%,
       var(--vscode-sideBar-background, var(--vscode-editor-background))
     );
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
     pointer-events: auto;
   }
 
@@ -478,6 +478,7 @@
     height: 22px;
     object-fit: cover;
     border: 1px solid var(--gb-rule);
+    border-radius: var(--gb-radius-sm);
     background: var(--gb-surface-sunken);
   }
 
@@ -494,8 +495,9 @@
   .expand {
     flex: 0 0 auto;
     margin-left: auto;
-    padding: 1px 7px;
+    padding: 2px 8px;
     border: 1px solid var(--gb-rule);
+    border-radius: var(--gb-radius-sm);
     background: color-mix(in srgb, var(--vscode-editor-background) 70%, transparent);
     color: var(--gb-accent);
     font: inherit;
@@ -523,25 +525,28 @@
     min-width: 0;
   }
 
+  /* Default spacing between every transcript card. */
+  .row + .row {
+    margin-top: var(--gb-stack-gap);
+  }
+
+  /* Stacked tools: same rhythm as other cards (no tuck / no special case). */
   .row.tucked {
-    margin-top: -12px;
+    margin-top: var(--gb-stack-gap);
   }
 
-  .row.msg-user {
-    margin-top: 4px;
-  }
-
-  /* Clearer turn separation: You → Grok and Grok → You. */
-  .row.after-user {
-    margin-top: 14px;
-  }
-
+  /* You↔Grok turn boundary — one clear step larger, not additive on top of stack-gap. */
+  .row.after-user,
   .row.msg-assistant + .row.msg-user {
-    margin-top: 14px;
+    margin-top: var(--gb-stack-turn);
   }
 
   .nested-think {
-    margin: 2px 0 8px;
+    margin: 0 0 var(--gb-gap);
+  }
+
+  .nested-think:last-of-type {
+    margin-bottom: var(--gb-space);
   }
 
   .bubble {
@@ -549,15 +554,15 @@
   }
 
   .role {
-    margin-bottom: 4px;
+    margin-bottom: 10px;
     letter-spacing: 0.04em;
   }
 
   .role-row {
     display: flex;
     align-items: center;
-    gap: 7px;
-    margin-bottom: 4px;
+    gap: 8px;
+    margin-bottom: 10px;
   }
 
   .role-row .role {
@@ -573,20 +578,22 @@
   }
 
   .user {
-    padding: 8px 10px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--gb-accent) 28%, var(--gb-rule));
     border-left: 3px solid var(--gb-accent);
     background: color-mix(
       in srgb,
       var(--gb-accent) 10%,
       var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.12))
     );
-    border-radius: var(--gb-radius);
+    border-radius: var(--gb-radius-lg);
   }
 
   .user .body {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     color: var(--vscode-foreground);
+    line-height: 1.65;
   }
 
   /* After force-push / auto-flush — in chat, with a permanent badge. */
@@ -611,8 +618,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start; /* default stretch was warping <img> on the cross axis */
-    gap: 6px;
-    margin-bottom: 6px;
+    gap: 8px;
+    margin-bottom: 10px;
   }
 
   .img {
@@ -633,8 +640,9 @@
   .img-fallback {
     display: inline-flex;
     align-items: center;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border: 1px dashed var(--gb-rule);
+    border-radius: var(--gb-radius-sm);
     font-size: 11px;
     color: var(--gb-dim);
   }
@@ -642,16 +650,21 @@
   .assistant {
     position: relative;
     z-index: 0;
-    padding: 2px 0 2px 2px;
+    padding: 2px 0 6px;
+  }
+
+  .assistant .body {
+    line-height: 1.72;
   }
 
   .empty {
-    padding: 18px 4px;
+    padding: 22px 6px;
     color: var(--vscode-foreground);
+    line-height: 1.55;
   }
 
   .empty p {
-    margin: 0 0 8px;
+    margin: 0 0 12px;
   }
 
   .empty .dim {

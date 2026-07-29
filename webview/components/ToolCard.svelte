@@ -187,13 +187,9 @@
     border-color: var(--gb-danger);
   }
 
-  /*
-   * Runs of tool calls are drawn as one block with shared rules instead of a ladder of separate
-   * boxes. Same information, a third of the lines — which is what made a fast burst unreadable.
-   * Transcript closes the gap; this side only drops the doubled rule.
-   */
+  /* Spacing comes from transcript stack gap — no extra margin here. */
   .tool.stacked {
-    border-top: none;
+    margin-top: 0;
   }
 
   .head {
@@ -205,9 +201,9 @@
     flex: 1 1 auto;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     min-width: 0;
-    padding: 6px 9px;
+    padding: 9px 12px;
     border: none;
     background: none;
     color: var(--vscode-foreground);
@@ -317,7 +313,7 @@
   .peek {
     display: block;
     width: 100%;
-    padding: 0 9px 8px;
+    padding: 0 12px 10px;
     border: none;
     background: none;
     font: inherit;
@@ -331,11 +327,11 @@
 
   /* One line of what the tool is producing, clipped — enough to follow a fast run, no more. */
   .tail {
-    padding: 0 9px 6px 29px;
+    padding: 0 12px 10px 32px;
     color: var(--gb-dim);
     font-family: var(--gb-mono);
     font-size: 11px;
-    line-height: 1.4;
+    line-height: 1.45;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -348,18 +344,18 @@
   .body {
     display: flex;
     flex-direction: column;
-    gap: 7px;
-    padding: 7px 9px 8px;
+    gap: 10px;
+    padding: 10px 12px 12px;
     border-top: 1px solid var(--gb-rule);
   }
 
   /* Prompt-marked and accent-ruled so the command reads as input, not as more output. */
   .cmd {
     margin: 0;
-    padding: 5px 8px 5px 6px;
+    padding: 8px 10px;
     border-left: 2px solid var(--gb-accent);
     background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius);
+    border-radius: var(--gb-radius-sm);
     font-family: var(--gb-mono);
     font-size: 11.5px;
     line-height: 1.55;
@@ -377,9 +373,9 @@
     margin: 0;
     max-height: 220px;
     overflow: auto;
-    padding: 7px 8px;
+    padding: 10px 12px;
     background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius);
+    border-radius: var(--gb-radius-sm);
     font-family: var(--gb-mono);
     font-size: 11.5px;
     line-height: 1.55;

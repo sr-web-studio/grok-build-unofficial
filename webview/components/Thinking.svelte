@@ -43,9 +43,12 @@
   .thinking {
     position: relative;
     z-index: 0;
-    margin: 2px 0 6px;
-    padding: 6px 8px 6px 9px;
-    border-left: 2px dashed var(--gb-rule);
+    /* Vertical margin owned by transcript stack / nested-think — avoid double gaps. */
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--gb-think) 22%, var(--gb-rule));
+    border-left: 3px dashed var(--gb-rule);
+    border-radius: var(--gb-radius);
     background: color-mix(in srgb, var(--gb-think) 8%, var(--vscode-editor-background));
     color: var(--gb-dim);
     isolation: isolate;
@@ -101,10 +104,11 @@
   }
 
   .body {
-    margin-top: 4px;
+    margin-top: 10px;
     font-size: 0.94em;
     opacity: 0.9;
-    max-height: 16em;
+    max-height: 18em;
     overflow: auto;
+    line-height: 1.65;
   }
 </style>

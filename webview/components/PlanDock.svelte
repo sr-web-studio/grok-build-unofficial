@@ -58,16 +58,19 @@
 <style>
   .dock {
     flex: 0 0 auto;
-    border-top: 1px solid var(--gb-rule-strong, var(--gb-rule));
+    margin: 0 10px 8px;
+    border: 1px solid var(--gb-rule);
+    border-radius: var(--gb-radius);
     background: var(--gb-surface);
+    overflow: hidden;
   }
 
   .head {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     width: 100%;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border: none;
     background: none;
     color: var(--vscode-foreground);
@@ -96,15 +99,18 @@
 
   .bar {
     flex: 0 1 4em;
-    height: 2px;
+    height: 4px;
     background: var(--gb-rule);
+    border-radius: 999px;
     min-width: 2em;
+    overflow: hidden;
   }
 
   .fill {
     display: block;
     height: 100%;
     background: var(--gb-accent);
+    border-radius: 999px;
   }
 
   .sum {
@@ -120,10 +126,10 @@
   ul {
     list-style: none;
     margin: 0;
-    padding: 0 10px 8px;
+    padding: 8px 12px 10px;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 6px;
     border-top: 1px solid var(--gb-rule);
     max-height: 10em;
     overflow: auto;
@@ -131,10 +137,11 @@
 
   li {
     display: flex;
-    gap: 7px;
+    gap: 8px;
     align-items: flex-start;
     font-size: 0.9em;
-    padding-top: 5px;
+    padding-top: 2px;
+    line-height: 1.45;
   }
 
   .box {
@@ -143,7 +150,7 @@
     height: 14px;
     margin-top: 1px;
     border: 1px solid var(--gb-rule);
-    border-radius: 2px;
+    border-radius: var(--gb-radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;

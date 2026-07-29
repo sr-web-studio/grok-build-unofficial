@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-07-29
+
+### Changed
+
+- Softer chat chrome: light radius tokens, clearer card spacing rhythm (tools / thoughts / turns)
+- Roomier assistant **markdown** (line-height, paragraphs, lists, code blocks, tables)
+- Turn usage footer and thinking blocks aligned with the same vertical scale
+
 ## [0.1.2] — 2026-07-28
 
 ### Added
