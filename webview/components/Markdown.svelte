@@ -206,18 +206,22 @@
     font-weight: 500;
     cursor: pointer;
     line-height: 1;
-    opacity: 0;
-    transition: opacity var(--dur-fast) var(--ease-standard);
+    /*
+     * Always visible, like the copy control under a message. Hover-only hid the one affordance
+     * the user needs when the agent hands back a snippet to paste somewhere.
+     */
+    transition: color var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard);
   }
 
-  .md :global(.md-code-wrap:hover .md-copy),
+  .md :global(.md-copy:hover),
   .md :global(.md-copy:focus-visible) {
-    opacity: 1;
+    background: var(--bg-active);
+    color: var(--text);
   }
 
   .md :global(.md-copy.copied) {
     color: var(--success);
-    opacity: 1;
   }
 
   .md :global(.md-copy-idle),
