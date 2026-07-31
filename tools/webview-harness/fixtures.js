@@ -120,6 +120,18 @@ export function formatTokens(n) {
 const LONG_COMMAND =
   'node --experimental-vm-modules node_modules/typescript/lib/tsc.js --noEmit -p tsconfig.json && node --experimental-vm-modules node_modules/svelte-check/bin/svelte-check --tsconfig ./tsconfig.webview.json --threshold error --output human';
 
+/**
+ * Grok's read tool returns display-ready text: `N→` in front of every line, where N is the real
+ * line in the file. The webview has to strip that, so the fixtures must carry it.
+ */
+function numbered(text, start = 1) {
+  return text
+    .replace(/\n$/, '')
+    .split('\n')
+    .map((line, i) => `${i + start}→${line}`)
+    .join('\n');
+}
+
 function textBlock(role, text, extra = {}) {
   return { id: id('t'), ts: Date.now(), kind: 'text', role, text, streaming: false, ...extra };
 }
@@ -166,7 +178,7 @@ function showcaseBlocks() {
     toolBlock({
       input: { path: `${CWD}/webview/components/StatusLine.svelte` },
       locations: [{ path: `${CWD}/webview/components/StatusLine.svelte`, line: 41 }],
-      contents: [{ type: 'text', text: OLD_FILE }],
+      contents: [{ type: 'text', text: numbered(OLD_FILE, 41) }],
     }),
     toolBlock({
       name: 'read_file',
@@ -174,7 +186,7 @@ function showcaseBlocks() {
       toolKind: 'read',
       input: { path: `${CWD}/webview/components/ToolCard.svelte` },
       locations: [{ path: `${CWD}/webview/components/ToolCard.svelte`, line: 1 }],
-      contents: [{ type: 'text', text: LONG_READ }],
+      contents: [{ type: 'text', text: numbered(LONG_READ) }],
     }),
     toolBlock({
       name: 'search_replace',
@@ -228,6 +240,14 @@ function showcaseBlocks() {
       input: { command: 'npm test' },
       error: 'exit code 1',
       contents: [{ type: 'text', text: 'npm error Missing script: "test"' }],
+    }),
+    // Unmapped kind: the verb falls back to the label, so the row must not print it twice.
+    toolBlock({
+      name: 'ask_user',
+      label: 'Ask User',
+      toolKind: 'unknown',
+      title: 'Ask the user',
+      contents: [{ type: 'text', text: 'User chose: round to two decimals' }],
     }),
     {
       id: id('plan'),
@@ -417,7 +437,20 @@ export const scenarios = [
             'No behaviour outside the two components changes.',
         },
       ];
-      post({ type: 'state', state: { status: baseStatus({ permissionMode: 'plan', agentState: 'awaitingApproval' }), blocks, showThinking: true, autoExpandThinking: false } });
+      // The dock is fed by `status.planEntries`, not by the transcript's plan block.
+      post({
+        type: 'state',
+        state: {
+          status: baseStatus({
+            permissionMode: 'plan',
+            agentState: 'awaitingApproval',
+            planEntries: blocks[1].entries,
+          }),
+          blocks,
+          showThinking: true,
+          autoExpandThinking: false,
+        },
+      });
     },
   },
 

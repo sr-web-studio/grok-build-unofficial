@@ -57,8 +57,18 @@
   const filePath = $derived(str(input.path) ?? str(input.file_path) ?? diff?.path ?? block.locations[0]?.path);
   const query = $derived(str(input.query) ?? str(input.pattern) ?? str(input.regex));
   const shortPath = $derived(filePath ? shortenPath(filePath, cwd) : undefined);
+  const kindVerb = $derived(kindVerbs[block.toolKind]);
+  /*
+   * The label is only a usable target when it is not already the verb. An unmapped tool kind
+   * falls back to the uppercased label for the verb, and repeating it here read "ASK USER
+   * Ask User" on the same row.
+   */
   const displayTarget = $derived(
-    command ?? (shortPath ? middleEllipsis(shortPath) : undefined) ?? query ?? block.label ?? '',
+    command ??
+      (shortPath ? middleEllipsis(shortPath) : undefined) ??
+      query ??
+      (kindVerb ? block.label : undefined) ??
+      '',
   );
 
   const pending = $derived(block.status === 'pending');
@@ -70,7 +80,7 @@
 
   const body = $derived(live || output);
   const terminal = $derived(block.toolKind === 'execute');
-  const verb = $derived(kindVerbs[block.toolKind] ?? block.label?.toUpperCase() ?? 'TOOL');
+  const verb = $derived(kindVerb ?? block.label?.toUpperCase() ?? 'TOOL');
   const mutating = $derived(!block.readOnly);
 
   /** WRITE = new file (diff with null oldText). EDIT = real change (non-null oldText). */
@@ -98,6 +108,29 @@
       .filter((l) => l.length > 0);
     return (terminal ? lines.at(-1) : lines[0]) ?? '';
   });
+
+  /**
+   * Grok's read tool hands back display-ready text: every line is prefixed `N→`, where N is the
+   * real line in the file. Rendering that inside a preview which draws its own gutter printed the
+   * numbers twice. Strip the prefixes, keep the first N — it tells the gutter which line the
+   * preview starts at, and tells the editor where to jump when the row is opened.
+   */
+  const numberedRead = $derived.by(() => {
+    if (!body || terminal || block.toolKind !== 'read') return undefined;
+    const lines = body.split('\n');
+    const matches = lines.map((l) => /^\s*(\d+)→(.*)$/.exec(l));
+    const hits = matches.filter((m) => m !== null).length;
+    // A file that merely contains an arrow must not be mangled — demand the whole block.
+    if (hits === 0 || hits < lines.length - 1) return undefined;
+    const first = matches.find((m) => m !== null)!;
+    return {
+      text: matches.map((m, i) => (m ? m[2] : lines[i])).join('\n'),
+      startLine: Number(first[1]),
+    };
+  });
+
+  /** Where `open` should land: the line the preview actually starts at, if we know it. */
+  const openLine = $derived(block.locations[0]?.line ?? numberedRead?.startLine);
 
   /**
    * While the tool is still running, keep a single stable header row. Peek/tail/diff
@@ -209,7 +242,7 @@
         type="button"
         class="path"
         title={filePath}
-        onclick={() => onOpenPath(filePath, block.locations[0]?.line)}
+        onclick={() => onOpenPath(filePath, openLine)}
       >
         {middleEllipsis(shortPath)}
       </button>
@@ -264,7 +297,7 @@
           type="button"
           class="ghost-action"
           title="Open {filePath}"
-          onclick={() => onOpenPath(filePath, block.locations[0]?.line)}>open</button
+          onclick={() => onOpenPath(filePath, openLine)}>open</button
         >
       {/if}
     </div>
@@ -289,7 +322,11 @@
 
   {#if showReadPreview}
     <div class="preview-body">
-      <CodePreview text={body} maxRows={PREVIEW_MAX_ROWS} />
+      <CodePreview
+        text={numberedRead?.text ?? body}
+        startLine={numberedRead?.startLine ?? 1}
+        maxRows={PREVIEW_MAX_ROWS}
+      />
     </div>
   {/if}
 

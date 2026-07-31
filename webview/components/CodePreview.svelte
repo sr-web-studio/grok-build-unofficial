@@ -7,9 +7,11 @@
     text: string;
     /** Visible line count when collapsed. ~10–12 lines of 12.5px/1.55 mono. */
     maxRows?: number;
+    /** Real file line of `text`'s first line, so the gutter matches the editor. */
+    startLine?: number;
   }
 
-  let { text, maxRows = 11 }: Props = $props();
+  let { text, maxRows = 11, startLine = 1 }: Props = $props();
 
   let expanded = $state(false);
 
@@ -26,7 +28,7 @@
   <div class="scroll" class:capped={!expanded && overflows}>
     {#each visible as line, i (i)}
       <div class="line">
-        <span class="num">{i + 1}</span>
+        <span class="num">{i + startLine}</span>
         <span class="content">{line.length ? line : ' '}</span>
       </div>
     {/each}

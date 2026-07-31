@@ -410,19 +410,25 @@
       </div>
     {/each}
 
-    {#if showScrollPill}
-      <button
-        type="button"
-        class="scroll-pill"
-        title="Jump to latest"
-        aria-label="Jump to latest"
-        onclick={scrollToBottom}
-      >
-        <Icon name="arrowDown" size={12} />
-        <span>Latest</span>
-      </button>
-    {/if}
   </div>
+
+  <!--
+    Outside `.scroller` on purpose. An absolutely-positioned child of a scroll container anchors
+    to the *content* box, so `bottom: 12px` pinned the pill to the end of the transcript and it
+    scrolled away with the first message instead of floating. `.wrap` does not scroll.
+  -->
+  {#if showScrollPill}
+    <button
+      type="button"
+      class="scroll-pill"
+      title="Jump to latest"
+      aria-label="Jump to latest"
+      onclick={scrollToBottom}
+    >
+      <Icon name="arrowDown" size={12} />
+      <span>Latest</span>
+    </button>
+  {/if}
 </div>
 
 <style>
@@ -500,7 +506,7 @@
   }
 
   /* Default rhythm between transcript blocks. Scroll pill is an overlay — excluded. */
-  .scroller > *:not(.scroll-pill) + *:not(.scroll-pill) {
+  .scroller > * + * {
     margin-top: var(--space-3);
   }
 
@@ -513,8 +519,8 @@
     margin-top: 0;
   }
 
-  /* Measure cap for flow content in a wide panel; never size the scroll pill. */
-  .scroller > *:not(.scroll-pill):not(.empty) {
+  /* Measure cap for flow content in a wide panel. */
+  .scroller > *:not(.empty) {
     width: 100%;
     max-width: 72ch;
     margin-left: auto;
@@ -804,15 +810,15 @@
   }
 
   /*
-   * Scroll-to-latest: overlay, content-width (~72px), 12px from scroller bottom-right.
-   * Chrome stretches absolute flex children across the cross axis — pin width to content.
+   * Scroll-to-latest: overlay on `.wrap`, content-width, 12px from the bottom-right of the
+   * visible transcript. Chrome stretches absolute flex children across the cross axis — pin
+   * width to content.
    */
   .scroll-pill {
     position: absolute;
     bottom: 12px;
     right: 12px;
     width: max-content;
-    align-self: flex-start;
     z-index: 20;
     display: flex;
     align-items: center;
