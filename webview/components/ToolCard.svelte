@@ -3,6 +3,7 @@
   import type { ToolBlock } from '../../src/shared/protocol';
   import { lineDiff } from '../diff';
   import { middleEllipsis, shortenPath } from '../paths';
+  import CodePreview from './CodePreview.svelte';
   import DiffView from './DiffView.svelte';
   import Icon from './Icon.svelte';
 
@@ -22,6 +23,9 @@
     permission: 'PERM',
   };
 
+  /** ~10–12 lines of mono preview; shared by CodePreview and DiffView. */
+  const PREVIEW_MAX_ROWS = 11;
+
   interface Props {
     block: ToolBlock;
     cwd?: string;
@@ -34,6 +38,10 @@
   let { block, cwd, onOpenPath, onOpenDiff, stacked = false }: Props = $props();
 
   let manual = $state<boolean | null>(null);
+  let outputExpanded = $state(false);
+  let cmdExpanded = $state(false);
+  let cmdTruncated = $state(false);
+  let cmdEl: HTMLElement | undefined = $state();
 
   const input = $derived((block.input ?? {}) as Record<string, unknown>);
 
@@ -65,8 +73,12 @@
   const verb = $derived(kindVerbs[block.toolKind] ?? block.label?.toUpperCase() ?? 'TOOL');
   const mutating = $derived(!block.readOnly);
 
+  /** WRITE = new file (diff with null oldText). EDIT = real change (non-null oldText). */
+  const isWriteDiff = $derived(Boolean(diff && diff.oldText === null));
+  const isEditDiff = $derived(Boolean(diff && diff.oldText !== null));
+
   const diffStats = $derived.by(() => {
-    if (!diff) return undefined;
+    if (!diff || !isEditDiff) return undefined;
     return lineDiff(diff.oldText, diff.newText);
   });
 
@@ -90,17 +102,30 @@
   /**
    * While the tool is still running, keep a single stable header row. Peek/tail/diff
    * previews only appear after completion — mid-flight content thrash is what made tool
-   * cards feel artificial.
+   * cards feel artificial. Terminal output is the exception (streams live).
    */
-  const showDiffSub = $derived(!busy && !failed && Boolean(diff));
-  const showTail = $derived(!open && !busy && !failed && !diff && !terminal && Boolean(tail));
-  /** Terminal output sits under the row once there is anything to show (live or final). */
+  const showReadPreview = $derived(
+    !busy && !failed && !diff && !terminal && block.toolKind === 'read' && Boolean(body),
+  );
+  const showWritePreview = $derived(!busy && !failed && isWriteDiff && Boolean(diff?.newText));
+  const showEditPreview = $derived(!busy && !failed && isEditDiff && Boolean(diff));
+  /** SEARCH / LIST / FETCH / other — single-line tail, not a code preview. */
+  const showTail = $derived(
+    !open &&
+      !busy &&
+      !failed &&
+      !diff &&
+      !terminal &&
+      block.toolKind !== 'read' &&
+      Boolean(tail),
+  );
   const showTerminalOut = $derived(terminal && !failed && Boolean(body));
   const showExpandedBody = $derived(
     open &&
       !failed &&
       !diff &&
       !terminal &&
+      block.toolKind !== 'read' &&
       (Boolean(body) || Object.keys(input).length > 0),
   );
 
@@ -121,7 +146,22 @@
     return undefined;
   });
 
-  let outputExpanded = $state(false);
+  /** Measure whether the single-line command is actually ellipsised. */
+  $effect(() => {
+    const el = cmdEl;
+    const cmd = command;
+    if (!el || !cmd || !terminal) {
+      cmdTruncated = false;
+      return;
+    }
+    const check = () => {
+      cmdTruncated = el.scrollWidth > el.clientWidth + 1;
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
 
   function str(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -140,14 +180,14 @@
     return parts.join('\n').trimEnd();
   }
 
-  function toggleDiffPreview() {
-    manual = !open;
+  function toggleCmdExpand() {
+    cmdExpanded = !cmdExpanded;
   }
 </script>
 
 <div class="tool" class:stacked class:failed>
   <div class="tool-row">
-    <div class="verb-col">
+    <div class="verb-col" class:icon-only={terminal}>
       {#if indicatorState !== 'done'}
         <span
           class="indicator {indicatorState}"
@@ -174,16 +214,44 @@
         {middleEllipsis(shortPath)}
       </button>
     {:else if terminal && command}
-      <span class="target terminal-cmd" title={command}>
+      <button
+        type="button"
+        class="target terminal-cmd"
+        class:expandable={cmdTruncated || cmdExpanded}
+        title={command}
+        bind:this={cmdEl}
+        onclick={() => {
+          if (cmdTruncated || cmdExpanded) toggleCmdExpand();
+        }}
+        aria-expanded={cmdTruncated || cmdExpanded ? cmdExpanded : undefined}
+        aria-label={
+          cmdTruncated || cmdExpanded
+            ? cmdExpanded
+              ? 'Collapse full command'
+              : 'Show full command'
+            : undefined
+        }
+      >
         <span class="sigil">$</span>
         {command}
-      </span>
+      </button>
     {:else}
       <span class="target" title={displayTarget || undefined}>{displayTarget}</span>
     {/if}
 
     <div class="actions">
-      {#if diff}
+      {#if terminal && command && (cmdTruncated || cmdExpanded)}
+        <button
+          type="button"
+          class="ghost-action"
+          title={cmdExpanded ? 'Collapse full command' : 'Show full command'}
+          aria-label={cmdExpanded ? 'Collapse full command' : 'Show full command'}
+          onclick={toggleCmdExpand}
+        >
+          {cmdExpanded ? 'collapse' : 'expand'}
+        </button>
+      {/if}
+      {#if isEditDiff}
         <button
           type="button"
           class="ghost-action"
@@ -206,31 +274,45 @@
     <div class="error-line">{block.error}</div>
   {/if}
 
+  {#if terminal && command && cmdExpanded}
+    <div class="cmd-full">
+      <span class="sigil">$</span>
+      {command}
+    </div>
+  {/if}
+
   {#if showTail}
     <button type="button" class="subrow tail" title={tail} onclick={() => (manual = true)}>
       {tail}
     </button>
   {/if}
 
-  {#if showDiffSub && diff && diffStats}
-    <div class="subrow">
+  {#if showReadPreview}
+    <div class="preview-body">
+      <CodePreview text={body} maxRows={PREVIEW_MAX_ROWS} />
+    </div>
+  {/if}
+
+  {#if showWritePreview && diff}
+    <div class="preview-body">
+      <CodePreview text={diff.newText} maxRows={PREVIEW_MAX_ROWS} />
+    </div>
+  {/if}
+
+  {#if showEditPreview && diff && diffStats}
+    <div class="subrow edit-meta">
       <span class="diff-counts">
         <span class="diff-add">+{diffStats.added}</span>
         <span class="diff-del">−{diffStats.removed}</span>
       </span>
-      <button type="button" class="ghost-action" onclick={toggleDiffPreview}>
-        {open ? 'collapse diff' : 'preview diff'}
-      </button>
     </div>
-    {#if open}
-      <div class="sub-body">
-        <DiffView oldText={diff.oldText} newText={diff.newText} />
-      </div>
-    {/if}
+    <div class="preview-body">
+      <DiffView oldText={diff.oldText} newText={diff.newText} maxRows={PREVIEW_MAX_ROWS} />
+    </div>
   {/if}
 
   {#if showTerminalOut}
-    <div class="sub-body">
+    <div class="preview-body">
       <pre class="terminal-out" class:expanded={outputExpanded}>{body}</pre>
       {#if body.split('\n').length > 12 || body.length > 800}
         <button
@@ -243,7 +325,7 @@
       {/if}
     </div>
   {:else if showExpandedBody}
-    <div class="sub-body">
+    <div class="preview-body">
       {#if body}
         <pre class="terminal-out" class:expanded={outputExpanded}>{body}</pre>
       {:else if Object.keys(input).length > 0}
@@ -284,6 +366,15 @@
     align-items: center;
     text-align: left;
     min-width: 0;
+  }
+
+  /*
+   * A terminal row has an icon, not a verb, so the 56px verb slot was empty space between the
+   * icon and the command. Shrink the column to the icon and give those pixels to the command,
+   * which is the row that most needs the width.
+   */
+  .verb-col.icon-only {
+    flex: 0 0 24px;
   }
 
   .indicator {
@@ -392,9 +483,25 @@
     color: var(--text);
   }
 
-  .terminal-cmd {
+  /* Command target is a button so keyboard users can expand a truncated command. */
+  button.target.terminal-cmd {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
     color: var(--text);
     font-weight: 500;
+    cursor: default;
+  }
+
+  button.target.terminal-cmd.expandable {
+    cursor: pointer;
+  }
+
+  button.target.terminal-cmd:focus-visible {
+    outline: none;
+    background-color: var(--bg-hover);
+    box-shadow: inset 2px 0 0 var(--focus);
   }
 
   .sigil {
@@ -429,7 +536,10 @@
     background-color: var(--bg-hover);
   }
 
-  /* Sub-rows share one left edge: 10 + 56 + 8 = 74px (dot gutter + verb + gap). */
+  /*
+   * SEARCH/LIST single-line tails still sit under the path column. Preview boxes
+   * (code / diff / terminal) are full transcript width — no 74px indent.
+   */
   .subrow {
     display: flex;
     align-items: center;
@@ -438,6 +548,10 @@
     margin-top: 4px;
     font-size: 11.5px;
     min-width: 0;
+  }
+
+  .subrow.edit-meta {
+    padding-left: 0;
   }
 
   .subrow.tail {
@@ -482,25 +596,27 @@
     font-size: 11.5px;
     color: var(--danger);
     margin-top: 4px;
-    padding-left: 74px;
     overflow-wrap: anywhere;
   }
 
-  .sub-body {
-    padding-left: 74px;
+  /* Full-width previews — verb column is header-only. */
+  .preview-body {
     margin-top: var(--space-2);
     min-width: 0;
   }
 
-  .cmd {
-    margin: 0 0 var(--space-2);
-    padding: 0;
+  .cmd-full {
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-inset);
+    border-radius: var(--radius-md);
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     color: var(--text);
+    min-width: 0;
   }
 
   .terminal-out {

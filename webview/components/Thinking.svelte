@@ -104,15 +104,24 @@
     transform: rotate(-90deg);
   }
 
-  /* Expanded body: muted aside with a 2px --border left rail only. */
+  /* Expanded body: muted aside with a 1px --border left rail only. */
   .body {
     margin-top: var(--space-2);
     padding-left: var(--space-3);
-    border-left: 2px solid var(--border);
+    border-left: 1px solid var(--border);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 12.5px;
     line-height: 1.65;
     max-height: 18em;
     overflow: auto;
+  }
+
+  .body :global(.md) {
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .body :global(.md p) {
+    color: var(--text-muted);
   }
 </style>

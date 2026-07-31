@@ -73,6 +73,53 @@ const NEW_FILE = `export function formatCost(ticks) {
 }
 `;
 
+/** Long enough that the 11-row code preview shows expand. */
+const LONG_READ = `import type { ToolBlock } from '../../src/shared/protocol';
+import { lineDiff } from '../diff';
+import { middleEllipsis, shortenPath } from '../paths';
+import CodePreview from './CodePreview.svelte';
+import DiffView from './DiffView.svelte';
+import Icon from './Icon.svelte';
+
+const kindVerbs = {
+  read: 'READ',
+  edit: 'EDIT',
+  write: 'WRITE',
+  search: 'SEARCH',
+  list: 'LIST',
+  execute: 'RUN',
+};
+
+export function collectText(contents) {
+  const parts = [];
+  for (const c of contents) {
+    if (c.type === 'text') parts.push(c.text);
+  }
+  return parts.join('\\n').trimEnd();
+}
+`;
+
+/** New-file write body (oldText null) — enough lines to exercise expand. */
+const WRITE_FILE = `/** Shared cost formatting for status line and turn footer. */
+export function formatCost(ticks) {
+  if (ticks == null || !Number.isFinite(ticks)) return '—';
+  const usd = ticks / 1e9;
+  if (usd < 0.01) return '<$0.01';
+  return '$' + usd.toFixed(2);
+}
+
+export function formatTokens(n) {
+  if (!Number.isFinite(n)) return '—';
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return (n / 1000).toFixed(1) + 'k';
+  return (n / 1_000_000).toFixed(2) + 'M';
+}
+`;
+
+/** Intentionally long so the header command ellipsises at 380px. */
+const LONG_COMMAND =
+  'node --experimental-vm-modules node_modules/typescript/lib/tsc.js --noEmit -p tsconfig.json && node --experimental-vm-modules node_modules/svelte-check/bin/svelte-check --tsconfig ./tsconfig.webview.json --threshold error --output human';
+
 function textBlock(role, text, extra = {}) {
   return { id: id('t'), ts: Date.now(), kind: 'text', role, text, streaming: false, ...extra };
 }
@@ -122,6 +169,14 @@ function showcaseBlocks() {
       contents: [{ type: 'text', text: OLD_FILE }],
     }),
     toolBlock({
+      name: 'read_file',
+      label: 'Read',
+      toolKind: 'read',
+      input: { path: `${CWD}/webview/components/ToolCard.svelte` },
+      locations: [{ path: `${CWD}/webview/components/ToolCard.svelte`, line: 1 }],
+      contents: [{ type: 'text', text: LONG_READ }],
+    }),
+    toolBlock({
       name: 'search_replace',
       label: 'Edit',
       toolKind: 'edit',
@@ -131,12 +186,38 @@ function showcaseBlocks() {
       contents: [{ type: 'diff', path: `${CWD}/webview/components/StatusLine.svelte`, oldText: OLD_FILE, newText: NEW_FILE }],
     }),
     toolBlock({
+      name: 'write',
+      label: 'Write',
+      toolKind: 'write',
+      readOnly: false,
+      input: { path: `${CWD}/webview/format.ts` },
+      locations: [{ path: `${CWD}/webview/format.ts` }],
+      contents: [{ type: 'diff', path: `${CWD}/webview/format.ts`, oldText: null, newText: WRITE_FILE }],
+    }),
+    toolBlock({
       name: 'run_terminal_command',
       label: 'Run Command',
       toolKind: 'execute',
       readOnly: false,
       input: { command: 'npm run typecheck' },
       contents: [{ type: 'text', text: '> tsc --noEmit -p tsconfig.json\n\n====================================\nsvelte-check found 0 errors and 0 warnings' }],
+    }),
+    toolBlock({
+      name: 'run_terminal_command',
+      label: 'Run Command',
+      toolKind: 'execute',
+      readOnly: false,
+      input: { command: LONG_COMMAND },
+      contents: [
+        {
+          type: 'text',
+          text:
+            '> tsc --noEmit -p tsconfig.json\n' +
+            '> svelte-check --tsconfig ./tsconfig.webview.json\n' +
+            '\n====================================\n' +
+            'svelte-check found 0 errors and 0 warnings',
+        },
+      ],
     }),
     toolBlock({
       name: 'run_terminal_command',

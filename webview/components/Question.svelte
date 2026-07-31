@@ -188,6 +188,9 @@
 <style>
   /* Question Card Wizard (Level 1 — Raised, no 2px purple frame) */
   .gb-question-card {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
     background-color: var(--bg-raised);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
@@ -349,6 +352,8 @@
     font-size: 12.5px;
     color: var(--text);
     font-weight: 500;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .gb-option-desc {
@@ -357,6 +362,7 @@
     font-weight: 400;
     line-height: 1.45;
     overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   /* Inputs (§1 focus rule): border to --focus at 1px + single outline offset 0. No double ring. */

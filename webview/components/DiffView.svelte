@@ -50,9 +50,25 @@
       <div class="more hint">+{hidden} more lines</div>
     {/if}
   {:else if hidden > 0}
-    <button type="button" class="more" onclick={() => (expanded = true)}>Show {hidden} more lines</button>
+    <button
+      type="button"
+      class="more"
+      title="Expand full diff"
+      aria-label="Expand full diff"
+      onclick={() => (expanded = true)}
+    >
+      expand
+    </button>
   {:else if expanded && result.rows.length > maxRows}
-    <button type="button" class="more" onclick={() => (expanded = false)}>Collapse</button>
+    <button
+      type="button"
+      class="more"
+      title="Collapse diff"
+      aria-label="Collapse diff"
+      onclick={() => (expanded = false)}
+    >
+      collapse
+    </button>
   {/if}
 </div>
 

@@ -311,12 +311,11 @@
               <div class="prose" class:caret={row.text.streaming}>
                 <Markdown text={row.text.text} streaming={row.text.streaming} />
               </div>
-              <div class="assistant-actions">
+              <div class="msg-actions">
                 <button
                   type="button"
-                  class="msg-copy-assistant"
+                  class="msg-copy-btn"
                   class:copied={copiedIds[row.text.id]}
-                  class:revealed={copiedIds[row.text.id]}
                   title="Copy markdown"
                   aria-label={copiedIds[row.text.id] ? 'Copied' : 'Copy markdown'}
                   onclick={(e) => copyMessage(row.text.id, row.text.text, e)}
@@ -332,17 +331,6 @@
             {@const long = isLong(block.text)}
             {@const open = expandedUsers[block.id] ?? false}
             <div class="user" class:was-queued={block.wasQueued} class:collapsed={long && !open}>
-              <button
-                type="button"
-                class="msg-copy-user"
-                class:copied={copiedIds[block.id]}
-                class:revealed={copiedIds[block.id]}
-                title="Copy message"
-                aria-label={copiedIds[block.id] ? 'Copied' : 'Copy message'}
-                onclick={(e) => copyMessage(block.id, block.text, e)}
-              >
-                <Icon name={copiedIds[block.id] ? 'check' : 'copy'} size={12} />
-              </button>
               {#if block.wasQueued}
                 <span class="queue-label" title="This was sent from the queue">queued</span>
               {/if}
@@ -370,18 +358,30 @@
                   {open ? 'show less' : 'show more'}
                 </button>
               {/if}
+              <div class="msg-actions">
+                <button
+                  type="button"
+                  class="msg-copy-btn"
+                  class:copied={copiedIds[block.id]}
+                  title="Copy message"
+                  aria-label={copiedIds[block.id] ? 'Copied' : 'Copy message'}
+                  onclick={(e) => copyMessage(block.id, block.text, e)}
+                >
+                  <Icon name={copiedIds[block.id] ? 'check' : 'copy'} size={12} />
+                  <span aria-live="polite">{copiedIds[block.id] ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
             </div>
           {:else}
             <div class="assistant" class:streaming={block.streaming}>
               <div class="prose" class:caret={block.streaming}>
                 <Markdown text={block.text} streaming={block.streaming} />
               </div>
-              <div class="assistant-actions">
+              <div class="msg-actions">
                 <button
                   type="button"
-                  class="msg-copy-assistant"
+                  class="msg-copy-btn"
                   class:copied={copiedIds[block.id]}
-                  class:revealed={copiedIds[block.id]}
                   title="Copy markdown"
                   aria-label={copiedIds[block.id] ? 'Copied' : 'Copy markdown'}
                   onclick={(e) => copyMessage(block.id, block.text, e)}
@@ -608,7 +608,6 @@
     background-color: var(--bg-raised);
     border-radius: var(--radius-lg);
     padding: var(--space-3);
-    padding-right: 32px;
     font-size: 13.5px;
     line-height: 1.7;
     color: var(--text);
@@ -714,47 +713,13 @@
     }
   }
 
-  .assistant-actions {
-    height: 20px;
+  .msg-actions {
     display: flex;
     align-items: center;
-    margin-top: 4px;
+    margin-top: var(--space-2);
   }
 
-  .msg-copy-user {
-    position: absolute;
-    top: var(--space-3);
-    right: var(--space-3);
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    border: none;
-    background: transparent;
-    color: var(--text-faint);
-    cursor: pointer;
-    opacity: 0;
-    transition:
-      opacity var(--dur-fast) var(--ease-standard),
-      background-color var(--dur-fast) var(--ease-standard),
-      color var(--dur-fast) var(--ease-standard);
-  }
-
-  .user:hover .msg-copy-user,
-  .msg-copy-user:focus-visible,
-  .msg-copy-user.revealed {
-    opacity: 1;
-  }
-
-  .msg-copy-user:hover {
-    color: var(--text-muted);
-    background-color: var(--bg-hover);
-  }
-
-  .msg-copy-assistant {
+  .msg-copy-btn {
     height: 20px;
     padding: 2px 6px;
     display: inline-flex;
@@ -767,29 +732,18 @@
     font-family: var(--font-ui);
     font-size: 11.5px;
     cursor: pointer;
-    opacity: 0;
     transition:
-      opacity var(--dur-fast) var(--ease-standard),
-      background-color var(--dur-fast) var(--ease-standard),
-      color var(--dur-fast) var(--ease-standard);
+      color var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard);
   }
 
-  .prose:hover + .assistant-actions .msg-copy-assistant,
-  .assistant-actions:hover .msg-copy-assistant,
-  .msg-copy-assistant:focus-visible,
-  .msg-copy-assistant.revealed {
-    opacity: 1;
-  }
-
-  .msg-copy-assistant:hover {
-    color: var(--text-muted);
+  .msg-copy-btn:hover {
+    color: var(--text);
     background-color: var(--bg-hover);
   }
 
-  .msg-copy-user.copied,
-  .msg-copy-assistant.copied {
+  .msg-copy-btn.copied {
     color: var(--success);
-    opacity: 1;
   }
 
   /* First-run: logo + one centred line. Unofficial tag kept. */

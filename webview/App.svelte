@@ -649,7 +649,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-3);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
   }
 
@@ -680,10 +680,10 @@
   }
 
   .gb-modal-body {
-    padding: var(--space-3);
+    padding: var(--space-2) var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
 
   .gb-card-kicker {
@@ -729,7 +729,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-md);
     background-color: transparent;
     cursor: pointer;
@@ -738,7 +738,6 @@
     width: 100%;
     box-sizing: border-box;
     transition: background-color var(--dur-fast) var(--ease-standard);
-
   }
 
   .gb-history-row:hover {
