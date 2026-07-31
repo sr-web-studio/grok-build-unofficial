@@ -20,15 +20,20 @@
 </script>
 
 <div class="thinking" class:streaming={block.streaming}>
-  <button class="head" onclick={() => (manual = !open)} aria-expanded={open}>
-    <Icon name="sparkles" size={13} />
+  <button class="head" type="button" onclick={() => (manual = !open)} aria-expanded={open}>
+    <Icon name="sparkles" size={12} />
     <span class="title">{block.streaming ? 'Thinking…' : 'Thought'}</span>
-    <span class="meta gb-meta">
-      {#if seconds !== undefined}{seconds}s{/if}
-      {#if seconds !== undefined && words > 0}·{/if}
-      {#if words > 0}{words} words{/if}
+    <span class="meta">
+      {#if seconds !== undefined || words > 0}
+        ·
+        {#if seconds !== undefined}{seconds}s{/if}
+        {#if seconds !== undefined && words > 0}
+          ·
+        {/if}
+        {#if words > 0}{words} words{/if}
+      {/if}
     </span>
-    <span class="chev" class:closed={!open}><Icon name="chevron" size={13} /></span>
+    <span class="chev" class:closed={!open}><Icon name="chevron" size={12} /></span>
   </button>
   {#if open}
     <div class="body"><Markdown text={block.text} streaming={block.streaming} /></div>
@@ -36,79 +41,78 @@
 </div>
 
 <style>
-  /*
-   * Own a solid surface so expanded thought never paints over the following "Grok" bubble
-   * (stacking/overlap in the narrow sidebar).
-   */
+  /* Level 0 — no card, no purple rail on the collapsed row. */
   .thinking {
     position: relative;
     z-index: 0;
-    /* Vertical margin owned by transcript stack / nested-think — avoid double gaps. */
     margin: 0;
-    padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--gb-think) 22%, var(--gb-rule));
-    border-left: 3px dashed var(--gb-rule);
-    border-radius: var(--gb-radius);
-    background: color-mix(in srgb, var(--gb-think) 8%, var(--vscode-editor-background));
-    color: var(--gb-dim);
-    isolation: isolate;
-  }
-
-  .thinking.streaming {
-    border-left-color: var(--gb-think);
+    padding: var(--space-1) 0;
+    color: var(--text-muted);
+    min-width: 0;
   }
 
   .head {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     width: 100%;
-    padding: 1px 0;
+    padding: 0;
     border: none;
-    border-radius: var(--gb-radius);
     background: none;
     color: inherit;
     font: inherit;
-    font-size: 0.9em;
+    font-size: 12px;
     text-align: left;
     cursor: pointer;
+    user-select: none;
   }
 
   .head:hover {
-    color: var(--vscode-foreground);
+    color: var(--text);
+  }
+
+  .head :global(.icon) {
+    color: var(--text-faint);
+    flex: 0 0 auto;
+  }
+
+  .title {
+    flex: 0 0 auto;
+    font-style: italic;
+  }
+
+  .meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-faint);
+    font-size: 11.5px;
   }
 
   .chev {
     display: flex;
     align-items: center;
     flex: 0 0 auto;
-    transition: transform 0.12s ease;
+    margin-left: auto;
+    color: var(--text-faint);
+    transition: transform var(--dur-fast) var(--ease-standard);
   }
 
   .chev.closed {
     transform: rotate(-90deg);
   }
 
-  .title {
-    flex: 0 0 auto;
-    font-style: italic;
-    font-weight: 600;
-  }
-
-  .meta {
-    display: flex;
-    gap: 4px;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-  }
-
+  /* Expanded body: muted aside with a 2px --border left rail only. */
   .body {
-    margin-top: 10px;
-    font-size: 0.94em;
-    opacity: 0.9;
+    margin-top: var(--space-2);
+    padding-left: var(--space-3);
+    border-left: 2px solid var(--border);
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.65;
     max-height: 18em;
     overflow: auto;
-    line-height: 1.65;
   }
 </style>

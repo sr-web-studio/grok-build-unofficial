@@ -29,8 +29,8 @@
 <div class="turn">
   {#if abnormal}<span class="stop">{abnormal.replace(/_/g, ' ')}</span>{/if}
   {#if usage}
-    {#if usage.inputTokens !== undefined}<span>↑ {tokens(usage.inputTokens)}</span>{/if}
-    {#if usage.outputTokens !== undefined}<span>↓ {tokens(usage.outputTokens)}</span>{/if}
+    {#if usage.inputTokens !== undefined}<span>↑{tokens(usage.inputTokens)}</span>{/if}
+    {#if usage.outputTokens !== undefined}<span>↓{tokens(usage.outputTokens)}</span>{/if}
     {#if usage.cachedReadTokens}<span>cache {tokens(usage.cachedReadTokens)}</span>{/if}
     {#if usage.reasoningTokens}<span>reasoning {tokens(usage.reasoningTokens)}</span>{/if}
     {#if duration !== undefined}<span>{duration}s</span>{/if}
@@ -40,23 +40,28 @@
 
 <style>
   .turn {
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-2);
+    font-size: 11.5px;
+    line-height: 1.3;
+    color: var(--text-faint);
+    font-family: var(--font-ui);
     display: flex;
+    align-items: center;
+    justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 11px;
-    /* Match stack rhythm so the usage strip doesn’t sit tighter than tool cards. */
-    padding-top: 10px;
-    margin-top: 2px;
-    border-top: 1px solid var(--gb-rule);
-    font-size: var(--gb-meta-size);
-    color: var(--gb-dim);
-    font-family: var(--gb-mono);
+    gap: var(--space-2);
+  }
+
+  .turn span {
+    white-space: nowrap;
   }
 
   .cost {
-    font-weight: 700;
+    color: var(--text-muted);
   }
 
   .stop {
-    color: var(--gb-warn);
+    color: var(--warning);
   }
 </style>

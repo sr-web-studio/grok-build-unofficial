@@ -66,6 +66,20 @@
       'M8 8h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2',
       'M16 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2',
     ],
+    // Theme toggle + composer chevrons (design system §7.6).
+    sun: [
+      'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8',
+      'M12 2v2',
+      'M12 20v2',
+      'm4.93 4.93 1.41 1.41',
+      'm15.66 15.66 1.41 1.41',
+      'M2 12h2',
+      'M20 12h2',
+      'm4.93 19.07 1.41-1.41',
+      'm15.66 8.34 1.41-1.41',
+    ],
+    moon: ['M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'],
+    chevronDown: ['m6 9 6 6 6-6'],
   } as const;
 
   export type IconName = keyof typeof icons;
@@ -75,13 +89,16 @@
   interface Props {
     name: IconName;
     size?: number;
+    class?: string;
+    style?: string;
   }
 
-  let { name, size = 14 }: Props = $props();
+  let { name, size = 14, class: className, style }: Props = $props();
 </script>
 
 <svg
-  class="icon"
+  class={['icon', className].filter(Boolean).join(' ')}
+  {style}
   width={size}
   height={size}
   viewBox="0 0 24 24"

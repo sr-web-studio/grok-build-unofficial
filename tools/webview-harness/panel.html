@@ -3,6 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <title>Grok Build panel (harness)</title>
+    <!--
+      The webview's design system. `src/host/panel.ts` links this same sheet in the real extension;
+      the harness has to do it by hand, or every component renders with no tokens and no fonts.
+    -->
+    <link rel="stylesheet" href="../../dist/webview.css" />
     <script type="module">
       import { applyTheme } from './theme.js';
       applyTheme(new URLSearchParams(location.search).get('theme') ?? 'dark');

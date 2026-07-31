@@ -44,6 +44,8 @@
   let blocks = $state<TranscriptBlock[]>([]);
   let showThinking = $state(true);
   let autoExpandThinking = $state(true);
+  /** Resolved palette from the host (`grokBuild.theme`); applied as data-theme on <html>. */
+  let theme = $state<'dark' | 'light'>('dark');
 
   /** Bumped on every host message so the transcript can re-run its sticky-scroll effect. */
   let revision = $state(0);
@@ -51,6 +53,8 @@
   let sessions = $state<SessionSummary[]>([]);
   let rewindPoints = $state<RewindPoint[]>([]);
   let panel = $state<'none' | 'history' | 'rewind' | 'about'>('none');
+  let lastActiveElement = $state<HTMLElement | null>(null);
+  let popoverElement = $state<HTMLElement | null>(null);
   let worktreeName = $state('');
 
   /** History filter, plus the row whose delete icon has been armed and is awaiting confirmation. */
@@ -66,8 +70,61 @@
     return q ? sessions.filter((s) => s.title.toLowerCase().includes(q)) : sessions;
   });
 
-  // Opening the history should put the caret in the search box — the list is a keyboard surface,
-  // and the binding only lands after the popover renders, so this waits for it rather than the click.
+  // Focus trap & trigger restoration for accessibility (§8)
+  function openPanel(nextPanel: 'history' | 'rewind' | 'about') {
+    if (panel === nextPanel) {
+      closePanel();
+    } else {
+      lastActiveElement = (document.activeElement as HTMLElement) ?? null;
+      panel = nextPanel;
+      sessionQuery = '';
+      pendingDelete = null;
+      renamingId = null;
+      renameDraft = '';
+      if (nextPanel === 'history') send({ type: 'listSessions' });
+      if (nextPanel === 'rewind') send({ type: 'listRewindPoints' });
+    }
+  }
+
+  function closePanel() {
+    panel = 'none';
+    if (lastActiveElement) {
+      lastActiveElement.focus();
+      lastActiveElement = null;
+    }
+  }
+
+  function handlePopoverKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      if (pendingDelete) {
+        pendingDelete = null;
+        return;
+      }
+      closePanel();
+      return;
+    }
+    if (e.key === 'Tab' && popoverElement) {
+      const focusables = popoverElement.querySelectorAll<HTMLElement>(
+        'button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
   $effect(() => {
     if (panel === 'history' && !renamingId) searchInput?.focus();
   });
@@ -81,15 +138,15 @@
   /** Modal for /context, /compact, and other slash utilities (not chat bubbles). */
   let commandResult = $state<CommandResultMsg | null>(null);
 
-  /** Latest jump lives on the .chat layer so it paints above Plan / other bottom overlays. */
-  let jumpVisible = $state(false);
-  let scrollTranscriptToBottom = $state<() => void>(() => undefined);
-
   const busy = $derived(status.agentState === 'thinking' || status.agentState === 'awaitingApproval');
   const noGit = $derived(status.isGitRepo === false);
 
   $effect(() => {
     saveDraft(draft);
+  });
+
+  $effect(() => {
+    document.documentElement.dataset.theme = theme;
   });
 
   $effect(() => {
@@ -115,7 +172,6 @@
       case 'blockPatch': {
         const block = blocks.find((b) => b.id === message.id);
         if (!block) break;
-        // The host sends narrow patches; it owns the shape, so a cast is honest here.
         Object.assign(block, message.patch as Partial<TranscriptBlock>);
         if (message.appendText !== undefined && 'text' in block) {
           block.text += message.appendText;
@@ -149,6 +205,9 @@
       case 'commandResult':
         commandResult = message.result;
         break;
+      case 'theme':
+        theme = message.theme;
+        break;
       default: {
         const exhaustive: never = message;
         void exhaustive;
@@ -157,32 +216,26 @@
     revision += 1;
   }
 
+  function toggleTheme(): void {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    theme = next;
+    send({ type: 'setTheme', theme: next });
+  }
+
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      // An armed delete is the innermost thing on screen, so Escape disarms it before it closes
-      // anything — pressing Escape must never be the gesture that deletes a session.
       if (pendingDelete) {
         pendingDelete = null;
         return;
       }
       if (panel !== 'none') {
-        panel = 'none';
+        closePanel();
         return;
       }
       if (busy) send({ type: 'cancel' });
     }
   }
 
-  function toggleHistory(): void {
-    panel = panel === 'history' ? 'none' : 'history';
-    sessionQuery = '';
-    pendingDelete = null;
-    renamingId = null;
-    renameDraft = '';
-    if (panel === 'history') send({ type: 'listSessions' });
-  }
-
-  /** The host answers with a refreshed list, so the row disappears on its own. */
   function deleteSession(sessionId: string): void {
     send({ type: 'deleteSession', sessionId });
     pendingDelete = null;
@@ -211,35 +264,25 @@
     renameDraft = '';
   }
 
-  function toggleRewind(): void {
-    panel = panel === 'rewind' ? 'none' : 'rewind';
-    if (panel === 'rewind') send({ type: 'listRewindPoints' });
-  }
-
   function loadSession(sessionId: string): void {
-    // Don't reload the session that's already open — only close the panel.
     if (sessionId === status.sessionId) {
-      panel = 'none';
+      closePanel();
       return;
     }
     send({ type: 'loadSession', sessionId });
-    panel = 'none';
+    closePanel();
   }
 
   function rewind(pointId: string): void {
     send({ type: 'rewind', pointId });
-    panel = 'none';
+    closePanel();
   }
 
-  /**
-   * Only `create` takes the name box; the other actions pick their target from a native
-   * QuickPick raised by the host, so the panel closes and gets out of the way.
-   */
   function worktree(action: WorktreeAction): void {
     const name = worktreeName.trim();
     send({ type: 'worktree', action, name: action === 'create' && name ? name : undefined });
     if (action === 'create') worktreeName = '';
-    panel = 'none';
+    closePanel();
   }
 
   function when(ts?: number): string {
@@ -256,17 +299,19 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="app">
+<div class="gb-app">
   {#if commandResult}
     <CommandResult result={commandResult} onClose={() => (commandResult = null)} />
   {/if}
-  <div class="top">
+  <div class="gb-top">
     <Header
       {showThinking}
+      {theme}
       isGitRepo={status.isGitRepo}
+      onToggleTheme={toggleTheme}
       onNewSession={() => send({ type: 'newSession' })}
-      onToggleHistory={toggleHistory}
-      onToggleRewind={toggleRewind}
+      onToggleHistory={() => openPanel('history')}
+      onToggleRewind={() => openPanel('rewind')}
       onToggleThinking={(show) => {
         showThinking = show;
         send({ type: 'toggleThinking', show });
@@ -274,228 +319,227 @@
       onOpenUserConfig={() => send({ type: 'openUserConfig' })}
       onShowLog={() => send({ type: 'showLog' })}
       onRestart={() => send({ type: 'restartAgent' })}
-      onAbout={() => (panel = panel === 'about' ? 'none' : 'about')}
+      onAbout={() => openPanel('about')}
     />
 
     <StatusLine {status} />
 
-    <!--
-      History, rewind and about hang below the header as a dropdown rather than sitting in the
-      column. As in-flow sections they shoved the whole conversation down the moment a toolbar
-      button was pressed; a chat panel should never move under you to show a menu.
-    -->
     {#if panel !== 'none'}
       <div
-        class="backdrop"
+        class="gb-backdrop"
         role="presentation"
-        onclick={() => (panel = 'none')}
-        oncontextmenu={() => (panel = 'none')}
+        onclick={closePanel}
+        oncontextmenu={closePanel}
       ></div>
-      <div class="popover" role="dialog" aria-modal="false">
+      <div
+        bind:this={popoverElement}
+        class="gb-popover"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        onkeydown={handlePopoverKeydown}
+      >
         {#if panel === 'about'}
-          <About agentVersion={status.agentVersion} onClose={() => (panel = 'none')} />
+          <About agentVersion={status.agentVersion} onClose={closePanel} />
         {:else if panel === 'history'}
-          <div class="panel">
-            <div class="panel-head gb-kicker">
-              <span>Recent sessions in this folder</span>
-              <button class="x" onclick={() => (panel = 'none')} aria-label="Close">
-                <Icon name="close" size={13} />
+          <div class="gb-modal-panel">
+            <div class="gb-modal-header">
+              <span class="gb-modal-title">Session History</span>
+              <button class="gb-icon-btn" onclick={closePanel} aria-label="Close">
+                <Icon name="close" size={14} />
               </button>
             </div>
-            <div class="search">
-              <Icon name="search" size={12} />
-              <input
-                bind:this={searchInput}
-                bind:value={sessionQuery}
-                placeholder="Search sessions…"
-                spellcheck="false"
-              />
-              {#if sessionQuery}
-                <button class="x" onclick={() => (sessionQuery = '')} aria-label="Clear search">
-                  <Icon name="close" size={12} />
-                </button>
+            <div class="gb-modal-body">
+              <div class="gb-search-box">
+                <Icon name="search" size={12} />
+                <input
+                  bind:this={searchInput}
+                  bind:value={sessionQuery}
+                  class="gb-question-input"
+                  placeholder="Search sessions…"
+                  spellcheck="false"
+                />
+                {#if sessionQuery}
+                  <button class="gb-icon-btn clear-btn" onclick={() => (sessionQuery = '')} aria-label="Clear search">
+                    <Icon name="close" size={12} />
+                  </button>
+                {/if}
+              </div>
+
+              {#if sessions.length === 0}
+                <div class="gb-panel-empty">No sessions yet.</div>
+              {:else if visibleSessions.length === 0}
+                <div class="gb-panel-empty">Nothing matches “{sessionQuery.trim()}”.</div>
+              {:else}
+                {#each visibleSessions as session (session.sessionId)}
+                  {@const arming = pendingDelete === session.sessionId}
+                  {@const current = session.sessionId === status.sessionId}
+                  {@const renaming = renamingId === session.sessionId}
+                  <div class="gb-history-row" class:danger-armed={arming} class:current>
+                    {#if renaming}
+                      <form
+                        class="gb-rename-form"
+                        onsubmit={(e) => {
+                          e.preventDefault();
+                          commitRename();
+                        }}
+                      >
+                        <input
+                          bind:this={renameInput}
+                          bind:value={renameDraft}
+                          class="gb-question-input rename-input"
+                          placeholder="Session name"
+                          spellcheck="false"
+                          aria-label="Session name"
+                          onkeydown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelRename();
+                            }
+                          }}
+                        />
+                        <button class="gb-btn-ghost-action" type="submit" title="Save name" aria-label="Save name">
+                          <Icon name="check" size={12} />
+                        </button>
+                        <button
+                          class="gb-btn-ghost-action"
+                          type="button"
+                          title="Cancel"
+                          aria-label="Cancel rename"
+                          onclick={cancelRename}
+                        >
+                          <Icon name="close" size={12} />
+                        </button>
+                      </form>
+                    {:else if arming}
+                      <span class="gb-armed-text">Delete session "{session.title}"?</span>
+                      <div class="gb-row-actions">
+                        <button
+                          class="gb-btn-ghost-action danger-act"
+                          title="Delete this session for good"
+                          aria-label="Confirm delete"
+                          onclick={() => deleteSession(session.sessionId)}
+                        >
+                          <Icon name="check" size={12} />
+                        </button>
+                        <button
+                          class="gb-btn-ghost-action"
+                          title="Keep it"
+                          aria-label="Cancel delete"
+                          onclick={() => (pendingDelete = null)}
+                        >
+                          <Icon name="close" size={12} />
+                        </button>
+                      </div>
+                    {:else}
+                      <button class="gb-row-button" onclick={() => loadSession(session.sessionId)}>
+                        <span class="gb-session-title">{session.title}</span>
+                        {#if current}<span class="gb-current-tag">current</span>{/if}
+                        <span class="gb-session-time">{when(session.updatedAt)}</span>
+                      </button>
+                      <div class="gb-row-actions">
+                        <button
+                          class="gb-btn-ghost-action"
+                          title="Rename session"
+                          aria-label="Rename session"
+                          onclick={() => startRename(session)}
+                        >
+                          <Icon name="edit" size={12} />
+                        </button>
+                        {#if !current}
+                          <button
+                            class="gb-btn-ghost-action"
+                            title="Delete this session"
+                            aria-label="Delete session"
+                            onclick={() => (pendingDelete = session.sessionId)}
+                          >
+                            <Icon name="trash" size={12} />
+                          </button>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
               {/if}
             </div>
-
-            {#if sessions.length === 0}
-              <div class="panel-empty">No sessions yet.</div>
-            {:else if visibleSessions.length === 0}
-              <div class="panel-empty">Nothing matches “{sessionQuery.trim()}”.</div>
-            {:else}
-              {#each visibleSessions as session (session.sessionId)}
-                {@const arming = pendingDelete === session.sessionId}
-                {@const current = session.sessionId === status.sessionId}
-                {@const renaming = renamingId === session.sessionId}
-                <div class="row" class:arming class:current>
-                  {#if renaming}
-                    <form
-                      class="rename-form"
-                      onsubmit={(e) => {
-                        e.preventDefault();
-                        commitRename();
-                      }}
-                    >
-                      <input
-                        bind:this={renameInput}
-                        bind:value={renameDraft}
-                        class="rename-input"
-                        placeholder="Session name"
-                        spellcheck="false"
-                        aria-label="Session name"
-                        onkeydown={(e) => {
-                          if (e.key === 'Escape') {
-                            e.preventDefault();
-                            cancelRename();
-                          }
-                        }}
-                      />
-                      <button class="act confirm" type="submit" title="Save name" aria-label="Save name">
-                        <Icon name="check" size={13} />
-                      </button>
-                      <button
-                        class="act"
-                        type="button"
-                        title="Cancel"
-                        aria-label="Cancel rename"
-                        onclick={cancelRename}
-                      >
-                        <Icon name="close" size={13} />
-                      </button>
-                    </form>
-                  {:else}
-                    <button class="item" onclick={() => loadSession(session.sessionId)}>
-                      <span class="item-title">
-                        {session.title}
-                        {#if current}<span class="current-pill gb-tag">current</span>{/if}
-                      </span>
-                      <span class="item-meta gb-meta">{when(session.updatedAt)}</span>
-                    </button>
-                    <button
-                      class="act"
-                      title="Rename session"
-                      aria-label="Rename session"
-                      onclick={() => startRename(session)}
-                    >
-                      <Icon name="edit" size={13} />
-                    </button>
-                    <!--
-                      Delete arms in place: the trash icon becomes a confirm/cancel pair on the same
-                      row, so a misclick costs one more click rather than a saved conversation.
-                      The open session cannot be deleted from history.
-                    -->
-                    {#if current}
-                      <!-- open session stays put -->
-                    {:else if arming}
-                      <button
-                        class="act confirm"
-                        title="Delete this session for good"
-                        aria-label="Confirm delete"
-                        onclick={() => deleteSession(session.sessionId)}
-                      >
-                        <Icon name="check" size={13} />
-                      </button>
-                      <button
-                        class="act"
-                        title="Keep it"
-                        aria-label="Cancel delete"
-                        onclick={() => (pendingDelete = null)}
-                      >
-                        <Icon name="close" size={13} />
-                      </button>
-                    {:else}
-                      <button
-                        class="act"
-                        title="Delete this session"
-                        aria-label="Delete session"
-                        onclick={() => (pendingDelete = session.sessionId)}
-                      >
-                        <Icon name="trash" size={13} />
-                      </button>
-                    {/if}
-                  {/if}
-                </div>
-              {/each}
-            {/if}
           </div>
         {:else if panel === 'rewind'}
-          <div class="panel">
-            <div class="panel-head gb-kicker">
-              <span>Rewind to a checkpoint</span>
-              <button class="x" onclick={() => (panel = 'none')} aria-label="Close">
-                <Icon name="close" size={13} />
+          <div class="gb-modal-panel">
+            <div class="gb-modal-header">
+              <span class="gb-modal-title">Rewind &amp; Worktree</span>
+              <button class="gb-icon-btn" onclick={closePanel} aria-label="Close">
+                <Icon name="close" size={14} />
               </button>
             </div>
-            {#if rewindPoints.length === 0}
-              <div class="panel-empty">No checkpoints in this session yet.</div>
-            {:else}
-              {#each rewindPoints as point (point.id)}
-                <button class="item" onclick={() => rewind(point.id)}>
-                  <span class="item-title">{point.label}</span>
-                  <span class="item-meta gb-meta">{when(point.ts)}</span>
-                </button>
-              {/each}
-              <div class="panel-note">
-                Rewinding drops everything after that prompt — from the transcript and from the
-                agent's own history.
-              </div>
-            {/if}
-            <div class="panel-head worktree-head gb-kicker"><span>Worktrees</span></div>
-            <div class="worktree">
+            <div class="gb-modal-body">
+              <span class="gb-card-kicker">CHECKPOINTS</span>
+              {#if rewindPoints.length === 0}
+                <div class="gb-panel-empty">No checkpoints in this session yet.</div>
+              {:else}
+                {#each rewindPoints as point (point.id)}
+                  <button class="gb-history-row gb-row-button" onclick={() => rewind(point.id)}>
+                    <span class="gb-session-title">{point.label}</span>
+                    <span class="gb-session-time">{when(point.ts)}</span>
+                  </button>
+                {/each}
+                <div class="gb-panel-note">
+                  Rewinding drops everything after that prompt — from the transcript and from the
+                  agent's own history.
+                </div>
+              {/if}
+
+              <span class="gb-card-kicker worktree-kicker">WORKTREE</span>
               <input
                 bind:value={worktreeName}
+                class="gb-question-input"
                 placeholder="worktree name (optional)"
                 disabled={noGit}
                 onkeydown={(e) => {
                   if (e.key === 'Enter' && !noGit) worktree('create');
                 }}
               />
-              <button
-                class="gb-btn"
-                onclick={() => worktree('create')}
-                disabled={noGit}
-                title="Copy this repo into a fresh sandbox"
-              >
-                Create
-              </button>
+              <div class="gb-action-group worktree-actions">
+                <button
+                  class="gb-btn-primary"
+                  onclick={() => worktree('create')}
+                  disabled={noGit}
+                  title="Copy this repo into a fresh sandbox"
+                >
+                  Create
+                </button>
+                <button
+                  class="gb-btn-secondary"
+                  onclick={() => worktree('resume')}
+                  disabled={noGit}
+                  title="Create a sandbox and continue this chat inside it"
+                >
+                  Move session
+                </button>
+                <button class="gb-btn-secondary" onclick={() => worktree('list')} disabled={noGit}>Open…</button>
+                <button
+                  class="gb-btn-secondary"
+                  onclick={() => worktree('apply')}
+                  disabled={noGit}
+                  title="Bring a sandbox's changes back here"
+                >
+                  Apply…
+                </button>
+                <button class="gb-btn-ghost-danger" onclick={() => worktree('remove')} disabled={noGit}>
+                  Remove…
+                </button>
+              </div>
+              {#if noGit}
+                <div class="gb-panel-note">Worktrees need this folder to be a git repository.</div>
+              {/if}
             </div>
-            <div class="worktree">
-              <button
-                class="gb-btn"
-                onclick={() => worktree('resume')}
-                disabled={noGit}
-                title="Create a sandbox and continue this chat inside it"
-              >
-                Move session
-              </button>
-              <button class="gb-btn" onclick={() => worktree('list')} disabled={noGit}>Open…</button>
-              <button
-                class="gb-btn"
-                onclick={() => worktree('apply')}
-                disabled={noGit}
-                title="Bring a sandbox's changes back here"
-              >
-                Apply…
-              </button>
-              <button class="gb-btn danger" onclick={() => worktree('remove')} disabled={noGit}
-                >Remove…</button
-              >
-            </div>
-            {#if noGit}
-              <div class="panel-note">Worktrees need this folder to be a git repository.</div>
-            {/if}
           </div>
         {/if}
       </div>
     {/if}
   </div>
 
-  <!--
-    Stream (messages + Latest) and Plan are stacked, not overlaid:
-    - Plan is in-flow under the transcript so it never covers chat text
-    - Latest floats only inside the stream pane (above Plan, never on top of it)
-  -->
-  <div class="chat">
-    <div class="chat-stream">
+  <div class="gb-chat">
+    <div class="gb-chat-stream">
       <Transcript
         {blocks}
         {showThinking}
@@ -505,10 +549,6 @@
         agentState={status.agentState}
         setupHint={status.setupHint}
         loadingHistory={status.loadingHistory}
-        bind:jumpVisible
-        onJumpReady={(api) => {
-          scrollTranscriptToBottom = api.scrollToBottom;
-        }}
         onApprove={(requestId, decision: ApprovalDecision) =>
           send({ type: 'approve', requestId, decision })}
         onPlanDecision={(requestId, approve, feedback) =>
@@ -519,18 +559,6 @@
         onOpenDiff={(blockId) => send({ type: 'openDiff', blockId })}
         onShowLog={() => send({ type: 'showLog' })}
       />
-      {#if jumpVisible}
-        <button
-          class="chat-jump"
-          type="button"
-          title="Jump to latest"
-          aria-label="Jump to latest"
-          onclick={() => scrollTranscriptToBottom()}
-        >
-          <Icon name="arrowDown" size={14} />
-          <span>Latest</span>
-        </button>
-      {/if}
     </div>
     {#if status.planEntries?.length}
       <PlanDock entries={status.planEntries} />
@@ -554,259 +582,51 @@
 </div>
 
 <style>
-  /*
-   * Shared design tokens for the webview.
-   *
-   * esbuild-svelte injects component CSS, so tokens live on :root here (always mounted).
-   * Soft radius + roomy gaps (Claude-like comfort) while staying theme-aware via --vscode-*.
-   * Danger/warn/ok keep conventional editor meanings.
-   */
-  :global(:root) {
-    --gb-radius: 6px;
-    --gb-radius-sm: 4px;
-    --gb-radius-lg: 8px;
-    --gb-gap: 8px;
-    --gb-gap-tight: 5px;
-    --gb-space: 10px;
-    --gb-space-lg: 14px;
-    /*
-     * Transcript vertical rhythm — margins only (not flex gap + margin).
-     * stack-gap: between tools / thoughts / notices.
-     * stack-turn: You↔Grok turn boundaries only.
-     */
-    --gb-stack-gap: 8px;
-    --gb-stack-turn: 12px;
-
-    --gb-rule: var(--vscode-widget-border, rgba(128, 128, 128, 0.28));
-    --gb-rule-strong: var(--vscode-panel-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.45)));
-
-    --gb-surface: var(--vscode-editorWidget-background, var(--vscode-editor-background));
-    --gb-surface-sunken: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
-    --gb-dim: var(--vscode-descriptionForeground);
-
-    --gb-accent: var(--vscode-textLink-foreground);
-    --gb-danger: var(--vscode-errorForeground);
-    --gb-warn: var(--vscode-editorWarning-foreground, var(--vscode-charts-yellow, #c9a227));
-    --gb-ok: var(--vscode-charts-green, #4caf50);
-    --gb-plan: var(--vscode-charts-blue, #4a9eff);
-    --gb-think: var(--vscode-charts-purple, #b180d7);
-
-    --gb-heading: var(--vscode-font-family);
-    --gb-mono: var(--vscode-editor-font-family, ui-monospace, monospace);
-    --gb-kicker-size: 11px;
-    --gb-meta-size: 11px;
-
-    --gb-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
-  }
-
-  /* The webview host gives us theme variables but no base styling, so set it once here. */
-  :global(html),
-  :global(body) {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-  }
-
-  :global(body) {
-    font-family: var(--vscode-font-family);
-    font-size: var(--vscode-font-size);
-    color: var(--vscode-foreground);
-    background: var(--vscode-sideBar-background, var(--vscode-editor-background));
-    overflow: hidden;
-  }
-
-  :global(*, *::before, *::after) {
-    box-sizing: border-box;
-  }
-
-  /* Never a browser default ring — the design asks for a 2px offset outline everywhere. */
-  :global(:focus-visible) {
-    outline: 2px solid var(--vscode-focusBorder);
-    outline-offset: 2px;
-    border-radius: var(--gb-radius-sm);
-  }
-
-  :global(::selection) {
-    background: var(--vscode-editor-selectionBackground);
-  }
-
-  :global(::-webkit-scrollbar) {
-    width: 9px;
-    height: 9px;
-  }
-
-  :global(::-webkit-scrollbar-track) {
-    background: transparent;
-  }
-
-  :global(::-webkit-scrollbar-thumb) {
-    background: var(--vscode-scrollbarSlider-background);
-  }
-
-  :global(::-webkit-scrollbar-thumb:hover) {
-    background: var(--vscode-scrollbarSlider-hoverBackground);
-  }
-
-  /* Small caps section label — the one piece of type that carries the design's voice. */
-  :global(.gb-kicker) {
-    font-family: var(--gb-heading);
-    font-weight: 800;
-    font-size: var(--gb-kicker-size);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  :global(.gb-tag) {
-    font-family: var(--gb-mono);
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 1px 5px;
-    border-radius: var(--gb-radius);
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
-  }
-
-  :global(.gb-meta) {
-    font-family: var(--gb-mono);
-    font-size: var(--gb-meta-size);
-    color: var(--gb-dim);
-  }
-
-  /* Buttons: flush-left labels, square corners, themed hover — never the browser's chrome. */
-  :global(.gb-btn) {
+  /* Icon-sized ghost action inside a list row — smaller padding than the modal button set. */
+  .gb-btn-ghost-action {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    text-align: left;
-    font: inherit;
-    font-size: 0.9em;
-    font-weight: 700;
-    padding: 4px 10px;
-    border: 1px solid var(--vscode-button-border, transparent);
-    border-radius: var(--gb-radius);
-    background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 4px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
   }
 
-  :global(.gb-btn:hover:not(:disabled)) {
-    background: var(--vscode-button-secondaryHoverBackground);
+  .gb-btn-ghost-action:hover {
+    background-color: var(--bg-hover);
+    color: var(--text);
   }
 
-  :global(.gb-btn.primary) {
-    font-weight: 800;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+  .gb-btn-ghost-action.danger-act {
+    color: var(--danger);
   }
 
-  :global(.gb-btn.primary:hover:not(:disabled)) {
-    background: var(--vscode-button-hoverBackground);
-  }
-
-  :global(.gb-btn.ghost) {
-    background: none;
-    border-color: var(--gb-rule);
-  }
-
-  :global(.gb-btn.ghost:hover:not(:disabled)) {
-    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
-  }
-
-  :global(.gb-btn:disabled) {
-    opacity: 0.45;
-    cursor: default;
-  }
-
-  /* The streaming caret, shared by assistant text and any other live surface. */
-  :global(.gb-caret::after) {
-    content: '▍';
-    color: var(--gb-accent);
-    animation: gb-blink 1s step-start infinite;
-  }
-
-  /* `-global-` keeps the name unhashed, so components other than this one can use the class. */
-  @keyframes -global-gb-blink {
-    50% {
-      opacity: 0;
-    }
-  }
-
-  .app {
+  .gb-app {
     display: flex;
     flex-direction: column;
     height: 100vh;
     min-height: 0;
+    background-color: var(--bg);
+    color: var(--text);
   }
 
-  /* Column: message stream (flex) + plan strip (auto). No overlays on message text. */
-  .chat {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Only this pane hosts the Latest chip — never stacked over the plan bar. */
-  .chat-stream {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .chat-jump {
-    position: absolute;
-    right: 12px;
-    bottom: 12px;
-    z-index: 5;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 11px;
-    border: 1px solid color-mix(in srgb, var(--gb-accent) 40%, var(--gb-rule));
-    border-radius: 999px;
-    background: color-mix(
-      in srgb,
-      var(--vscode-button-background, var(--gb-accent)) 94%,
-      var(--vscode-editor-background)
-    );
-    color: var(--vscode-button-foreground, var(--vscode-foreground));
-    font: inherit;
-    font-size: 11px;
-    font-weight: 700;
-    box-shadow: var(--gb-shadow);
-    cursor: pointer;
-  }
-
-  .chat-jump:hover {
-    border-color: var(--gb-accent);
-    filter: brightness(1.08);
-  }
-
-  /*
-   * The header block is the anchor for every dropdown, so it owns a stacking context and sits
-   * above the transcript. Without the z-index the popover would render behind the conversation.
-   */
-  .top {
+  .gb-top {
     position: relative;
     flex: 0 0 auto;
     z-index: 30;
   }
 
-  .backdrop {
+  .gb-backdrop {
     position: fixed;
     inset: 0;
     z-index: 19;
+    background-color: rgba(0, 0, 0, 0.45);
   }
 
-  /*
-   * Anchored under the header and inset from both edges, so it reads as a panel dropped from the
-   * toolbar. It scrolls internally: a long session list must not grow past the sidebar.
-   */
-  .popover {
+  .gb-popover {
     position: absolute;
     top: 100%;
     left: 8px;
@@ -814,228 +634,278 @@
     z-index: 20;
     max-height: 65vh;
     overflow-y: auto;
-    background: var(--vscode-menu-background, var(--gb-surface));
-    border: 1px solid var(--vscode-menu-border, var(--gb-rule-strong));
-    border-radius: var(--gb-radius-lg);
-    box-shadow: var(--gb-shadow);
+    background-color: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
   }
 
-  .panel {
-    padding: 10px 12px 12px;
+  .gb-modal-panel {
+    display: flex;
+    flex-direction: column;
   }
 
-  .panel-head {
+  .gb-modal-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: var(--gb-dim);
-    margin-bottom: 8px;
+    justify-content: space-between;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border);
   }
 
-  .panel-head span {
-    flex: 1 1 auto;
+  .gb-modal-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
   }
 
-  .panel-empty,
-  .panel-note {
-    font-size: 0.85em;
-    color: var(--gb-dim);
-    padding: 4px 0;
-  }
-
-  .item {
+  .gb-icon-btn {
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-muted);
     display: flex;
-    align-items: baseline;
-    gap: 8px;
-    width: 100%;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .gb-icon-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text);
+  }
+
+  .gb-modal-body {
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .gb-card-kicker {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .worktree-kicker {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
+  }
+
+  .gb-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .gb-search-box :global(svg) {
+    position: absolute;
+    left: 10px;
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+
+  .gb-search-box input.gb-question-input {
+    padding-left: 28px;
+    padding-right: 28px;
+    margin-top: 0;
+  }
+
+  .gb-search-box .clear-btn {
+    position: absolute;
+    right: 4px;
+  }
+
+  /* List rows & history rows (§1 focus rule) */
+  .gb-history-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    cursor: pointer;
+    user-select: none;
     text-align: left;
-    padding: 4px 5px;
-    border: none;
-    border-radius: var(--gb-radius);
-    background: none;
-    color: var(--vscode-foreground);
-    font: inherit;
-    font-size: 0.9em;
-    cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+    transition: background-color var(--dur-fast) var(--ease-standard);
+
   }
 
-  .item:hover {
-    background: var(--vscode-list-hoverBackground);
+  .gb-history-row:hover {
+    background-color: var(--bg-hover);
   }
 
-  /* A history entry is a row, not a button: the title opens the session, the tail renames/deletes. */
-  .row {
-    display: flex;
-    align-items: center;
-  }
-
-  .row:hover {
-    background: var(--vscode-list-hoverBackground);
-  }
-
-  .row.current {
-    background: color-mix(in srgb, var(--gb-accent) 10%, transparent);
-  }
-
-  .row .item {
-    width: auto;
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .current-pill {
-    margin-left: 6px;
-    vertical-align: middle;
-  }
-
-  .rename-form {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 2px 0;
-  }
-
-  .rename-input {
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 3px 6px;
-    border: 1px solid var(--vscode-focusBorder, var(--gb-accent));
-    border-radius: var(--gb-radius);
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    font: inherit;
-    font-size: 0.9em;
-  }
-
-  .rename-input:focus {
+  .gb-history-row:focus-visible {
     outline: none;
+    background-color: var(--bg-hover);
+    border-left: 2px solid var(--focus);
   }
 
-  /* Armed rows are tinted so the two icons read as a question about *this* row. */
-  .row.arming {
-    background: color-mix(in srgb, var(--gb-danger) 14%, transparent);
+  .gb-history-row.current {
+    background-color: var(--accent-subtle);
   }
 
-  .act {
-    flex: 0 0 auto;
+  .gb-history-row.danger-armed {
+    background-color: var(--diff-del-bg);
+    border-left: 2px solid var(--danger);
+  }
+
+  .gb-row-button {
+    border: none;
+    background: transparent;
+    font-family: var(--font-ui);
     display: flex;
     align-items: center;
-    padding: 3px 5px;
-    border: none;
-    border-radius: var(--gb-radius);
-    background: none;
-    color: var(--gb-dim);
-    cursor: pointer;
-    /* Present but quiet, so the list still reads as titles — full strength on hover or when armed. */
-    opacity: 0.5;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    color: var(--text);
+    /* A button centres its text by default, so a short session title floated to the middle of
+       the row while a long one filled it — the list looked ragged for no visible reason. */
+    text-align: left;
   }
 
-  .row:hover .act,
-  .row.arming .act,
-  .act:focus-visible {
+  .gb-session-title {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 auto;
+  }
+
+  .gb-current-tag {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .gb-session-time {
+    color: var(--text-faint);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .gb-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+  }
+
+  .gb-history-row:hover .gb-row-actions,
+  .gb-history-row:focus-within .gb-row-actions,
+  .gb-history-row.danger-armed .gb-row-actions {
     opacity: 1;
   }
 
-  .act:hover {
-    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
-    color: var(--vscode-foreground);
-  }
 
-  .act.confirm {
-    color: var(--gb-danger);
-  }
 
-  /* Filter box: same input treatment as the worktree name, with the glyph inside the field. */
-  .search {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 5px;
-    padding: 0 5px;
-    background: var(--vscode-input-background);
-    border: 1px solid var(--vscode-input-border, var(--gb-rule));
-    border-radius: var(--gb-radius);
-    color: var(--gb-dim);
-  }
 
-  .search:focus-within {
-    border-color: var(--vscode-focusBorder);
-  }
-
-  .search input {
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 3px 0;
-    border: none;
-    background: none;
-    color: var(--vscode-input-foreground);
-    font: inherit;
-    font-size: 0.9em;
-  }
-
-  .search input:focus {
-    outline: none;
-  }
-
-  .item-title {
-    flex: 1 1 auto;
+  .gb-armed-text {
+    font-size: 12.5px;
+    color: var(--danger);
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .item-meta {
-    flex: 0 0 auto;
-  }
-
-  .worktree {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 5px;
-  }
-
-  .worktree-head {
-    margin-top: 9px;
-    border-top: 1px solid var(--gb-rule);
-    padding-top: 7px;
-  }
-
-  .worktree input {
-    flex: 1 1 8em;
-    min-width: 0;
-    padding: 3px 5px;
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border, var(--gb-rule));
-    border-radius: var(--gb-radius);
-    font: inherit;
-    font-size: 0.9em;
-  }
-
-  .worktree input:disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-
-  .panel button.x {
-    border: none;
-    border-radius: var(--gb-radius);
-    background: none;
-    color: var(--gb-dim);
+  .gb-rename-form {
     display: flex;
     align-items: center;
-    padding: 2px;
-    cursor: pointer;
+    gap: 4px;
+    width: 100%;
   }
 
-  .panel button.x:hover {
-    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  .rename-input {
+    margin-top: 0;
+    padding: 2px 6px;
   }
 
-  .danger {
-    color: var(--gb-danger);
+  /* Inputs (§1 focus rule): border to --focus at 1px + single outline offset 0. No double ring. */
+  .gb-question-input {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    box-sizing: border-box;
+  }
+
+  .gb-question-input:focus-visible {
+    border-color: var(--focus);
+    outline: 1px solid var(--focus);
+    outline-offset: 0;
+  }
+
+  .gb-panel-empty,
+  .gb-panel-note {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    padding: 4px 0;
+  }
+
+  .worktree-actions {
+    margin-top: 4px;
+  }
+
+  .gb-action-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+
+
+
+
+
+
+
+
+
+  /* Chat column & stream */
+  .gb-chat {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .gb-chat-stream {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /*
+   * The scroll-to-latest pill lives in Transcript.svelte, positioned against the scroller it
+   * belongs to. App used to render a second one here off the same `jumpVisible` flag; two pills
+   * for one action is worse than none, so this layer keeps only the layout.
+   */
+
+  button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 </style>

@@ -12,122 +12,169 @@
   const REPO_URL = 'https://github.com/sr-web-studio/grok-build-unofficial';
 </script>
 
-<div class="panel">
-  <div class="head gb-kicker">
-    <span>About</span>
-    <button class="x" onclick={onClose} aria-label="Close"><Icon name="close" size={13} /></button>
+<div class="gb-about-panel">
+  <div class="gb-modal-header">
+    <span class="gb-modal-title">About Grok Build</span>
+    <button class="gb-icon-btn" onclick={onClose} aria-label="Close">
+      <Icon name="close" size={14} />
+    </button>
   </div>
 
-  <div class="name">Grok Build UI <span class="gb-tag">Unofficial</span></div>
+  <div class="gb-modal-body">
+    <div class="gb-brand-line">
+      <span class="gb-wordmark">◆ GROK BUILD</span>
+      <span class="gb-unofficial-tag">unofficial</span>
+    </div>
 
-  <p class="body">
-    A <strong>community</strong> VS Code front-end for xAI’s Grok Build CLI (Agent Client Protocol).
-    <strong>Not affiliated with, endorsed by, or sponsored by xAI.</strong>
-    You need a separate, authenticated Grok Build CLI install — this extension is only the chat UI.
-  </p>
+    <p class="gb-disclaimer">
+      A <strong>community</strong> VS Code front-end for xAI’s Grok Build CLI (Agent Client Protocol).
+      <strong>Not affiliated with, endorsed by, or sponsored by xAI.</strong>
+      You need a separate, authenticated Grok Build CLI install — this extension is only the chat UI.
+    </p>
 
-  <dl class="facts">
-    <dt>Agent</dt>
-    <dd>grok {agentVersion ?? '—'}</dd>
-    <dt>CLI</dt>
-    <dd>
-      <button class="link" type="button" onclick={() => send({ type: 'openExternal', url: 'https://grok.x.ai/' })}>
-        grok.x.ai
-      </button>
-    </dd>
-    <dt>Repository</dt>
-    <dd>
-      <button class="link" type="button" onclick={() => send({ type: 'openExternal', url: REPO_URL })}>
-        GitHub
-      </button>
-    </dd>
-  </dl>
+    <div class="gb-facts-grid">
+      <div class="gb-fact-item">
+        <span class="gb-fact-label">Agent version:</span>
+        <span class="gb-fact-val">{agentVersion ?? '—'}</span>
+      </div>
+      <div class="gb-fact-item">
+        <span class="gb-fact-label">CLI domain:</span>
+        <span class="gb-fact-val">grok.x.ai</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="gb-modal-footer">
+    <button
+      class="gb-btn-secondary"
+      type="button"
+      onclick={() => send({ type: 'openExternal', url: REPO_URL })}
+    >
+      GitHub
+    </button>
+    <button
+      class="gb-btn-primary"
+      type="button"
+      onclick={() => send({ type: 'openExternal', url: 'https://grok.x.ai/' })}
+    >
+      grok.x.ai
+    </button>
+  </div>
 </div>
 
 <style>
-  /* Content only — the frame, background and shadow belong to the popover this sits inside. */
-  .panel {
-    padding: 7px 10px 10px;
+  .gb-about-panel {
+    display: flex;
+    flex-direction: column;
   }
 
-  .head {
+  .gb-modal-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    color: var(--gb-dim);
-    margin-bottom: 6px;
+    justify-content: space-between;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border);
   }
 
-  .head span {
-    flex: 1 1 auto;
+  .gb-modal-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
   }
 
-  .name {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 800;
-    font-size: 1.05em;
-  }
-
-  .body {
-    margin: 5px 0 8px;
-    font-size: 0.9em;
-    color: var(--gb-dim);
-    line-height: 1.5;
-  }
-
-  /* Label/value pairs on one line each, monospace values — the system's metadata treatment. */
-  .facts {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 2px 10px;
-    margin: 0;
-    font-size: var(--gb-meta-size);
-  }
-
-  .facts dt {
-    font-family: var(--gb-heading);
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--gb-dim);
-  }
-
-  .facts dd {
-    margin: 0;
-    min-width: 0;
-    font-family: var(--gb-mono);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-
-
-  button.link {
+  .gb-icon-btn {
     border: none;
-    background: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
     padding: 0;
-    font: inherit;
-    font-family: var(--gb-mono);
-    color: var(--gb-accent);
-    text-decoration: underline;
-    cursor: pointer;
-    text-align: left;
   }
 
-  button.x {
-    border: none;
-    border-radius: var(--gb-radius);
-    background: none;
-    color: var(--gb-dim);
+  .gb-icon-btn:hover {
+    background-color: var(--bg-hover);
+    color: var(--text);
+  }
+
+  .gb-modal-body {
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .gb-brand-line {
     display: flex;
     align-items: center;
-    padding: 2px;
-    cursor: pointer;
+    gap: 6px;
   }
 
-  button.x:hover {
-    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  .gb-wordmark {
+    font-family: var(--font-ui);
+    font-weight: 800;
+    font-size: 13.5px;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+
+  .gb-unofficial-tag {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  .gb-disclaimer {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .gb-facts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 11.5px;
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-3);
+  }
+
+  .gb-fact-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .gb-fact-label {
+    color: var(--text-faint);
+  }
+
+  .gb-fact-val {
+    font-family: var(--font-mono);
+    color: var(--text);
+  }
+
+  .gb-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-top: 1px solid var(--border);
+  }
+
+
+
+
+
+  button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 </style>

@@ -1,20 +1,25 @@
 <script lang="ts">
   import type { ToolCallContent, ToolKind } from '../../src/acp/types';
   import type { ToolBlock } from '../../src/shared/protocol';
+  import { lineDiff } from '../diff';
+  import { middleEllipsis, shortenPath } from '../paths';
   import DiffView from './DiffView.svelte';
-  import Icon, { type IconName } from './Icon.svelte';
+  import Icon from './Icon.svelte';
 
-  /** One glyph per tool kind; anything unmapped falls back to the generic file icon. */
-  const kindIcons: Partial<Record<ToolKind | 'unknown', IconName>> = {
-    execute: 'terminal',
-    edit: 'edit',
-    write: 'edit',
-    delete: 'edit',
-    move: 'edit',
-    search: 'search',
-    list: 'list',
-    fetch: 'search',
-    think: 'sparkles',
+  /** Uppercase verb labels from tool kind — the fixed column is sized for SEARCH. */
+  const kindVerbs: Partial<Record<ToolKind | 'unknown', string>> = {
+    read: 'READ',
+    edit: 'EDIT',
+    write: 'WRITE',
+    delete: 'DELETE',
+    move: 'MOVE',
+    search: 'SEARCH',
+    list: 'LIST',
+    fetch: 'FETCH',
+    execute: 'RUN',
+    think: 'THINK',
+    other: 'TOOL',
+    permission: 'PERM',
   };
 
   interface Props {
@@ -22,7 +27,7 @@
     cwd?: string;
     onOpenPath: (path: string, line?: number) => void;
     onOpenDiff: (blockId: string) => void;
-    /** True when the card directly above is also a tool card, so the two share one border. */
+    /** True when the block above is also a tool — spacing is CSS; prop kept for callers. */
     stacked?: boolean;
   }
 
@@ -43,16 +48,30 @@
   const command = $derived(str(input.command) ?? str(input.cmd) ?? str(input.script));
   const filePath = $derived(str(input.path) ?? str(input.file_path) ?? diff?.path ?? block.locations[0]?.path);
   const query = $derived(str(input.query) ?? str(input.pattern) ?? str(input.regex));
-  const target = $derived(command ?? (filePath ? shorten(filePath, cwd) : undefined) ?? query ?? '');
+  const shortPath = $derived(filePath ? shortenPath(filePath, cwd) : undefined);
+  const displayTarget = $derived(
+    command ?? (shortPath ? middleEllipsis(shortPath) : undefined) ?? query ?? block.label ?? '',
+  );
 
-  const running = $derived(block.status === 'pending' || block.status === 'in_progress');
+  const pending = $derived(block.status === 'pending');
+  const running = $derived(block.status === 'in_progress');
+  const busy = $derived(pending || running);
   const failed = $derived(block.status === 'failed');
   /** Failures stay collapsed — raw dumps used to auto-expand and flood the chat. */
   const open = $derived(manual ?? false);
 
   const body = $derived(live || output);
+  const terminal = $derived(block.toolKind === 'execute');
+  const verb = $derived(kindVerbs[block.toolKind] ?? block.label?.toUpperCase() ?? 'TOOL');
+  const mutating = $derived(!block.readOnly);
+
+  const diffStats = $derived.by(() => {
+    if (!diff) return undefined;
+    return lineDiff(diff.oldText, diff.newText);
+  });
+
   /**
-   * One line of what the tool produced, for the collapsed card.
+   * One line of what the tool produced, for the collapsed row.
    *
    * A command is summed up by where it ended, so that gets the last line. A read or a search is
    * summed up by what it found, so those get the first — the last line of a file is usually a
@@ -67,22 +86,42 @@
       .filter((l) => l.length > 0);
     return (terminal ? lines.at(-1) : lines[0]) ?? '';
   });
+
   /**
-   * While the tool is still running, keep the card one fixed-height header row. Peek/tail/diff
-   * previews only appear after completion — mid-flight content thrash (empty → first line →
-   * multi-line) is what made tool cards feel artificial.
+   * While the tool is still running, keep a single stable header row. Peek/tail/diff
+   * previews only appear after completion — mid-flight content thrash is what made tool
+   * cards feel artificial.
    */
-  const showPeek = $derived(!open && !running && !failed && Boolean(diff));
-  const showTail = $derived(!open && !running && !diff && Boolean(tail));
-  const hasBody = $derived(
-    Boolean(diff) ||
-      body.length > 0 ||
-      Boolean(block.error) ||
-      Object.keys(input).length > 0,
+  const showDiffSub = $derived(!busy && !failed && Boolean(diff));
+  const showTail = $derived(!open && !busy && !failed && !diff && !terminal && Boolean(tail));
+  /** Terminal output sits under the row once there is anything to show (live or final). */
+  const showTerminalOut = $derived(terminal && !failed && Boolean(body));
+  const showExpandedBody = $derived(
+    open &&
+      !failed &&
+      !diff &&
+      !terminal &&
+      (Boolean(body) || Object.keys(input).length > 0),
   );
-  const icon = $derived(kindIcons[block.toolKind] ?? 'file');
-  /** Terminal output gets the console treatment; anything else stays in the editor's code block. */
-  const terminal = $derived(block.toolKind === 'execute');
+
+  /** Indicator state class for the reserved gutter dot. */
+  const indicatorState = $derived.by(() => {
+    if (block.waiting) return 'awaiting' as const;
+    if (failed) return 'failed' as const;
+    if (running) return 'running' as const;
+    if (pending) return 'pending' as const;
+    return 'done' as const;
+  });
+
+  const indicatorLabel = $derived.by(() => {
+    if (block.waiting) return 'waiting';
+    if (failed) return 'failed';
+    if (running) return 'running';
+    if (pending) return 'pending';
+    return undefined;
+  });
+
+  let outputExpanded = $state(false);
 
   function str(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -101,306 +140,394 @@
     return parts.join('\n').trimEnd();
   }
 
-  function shorten(p: string, root?: string): string {
-    if (!root) return p;
-    const normalized = p.replace(/\\/g, '/');
-    const base = root.replace(/\\/g, '/').replace(/\/$/, '');
-    return normalized.toLowerCase().startsWith(base.toLowerCase() + '/')
-      ? normalized.slice(base.length + 1)
-      : normalized;
+  function toggleDiffPreview() {
+    manual = !open;
   }
 </script>
 
-<div class="tool" class:failed={block.status === 'failed'} class:stacked>
-  <div class="head">
-    <button class="toggle" onclick={() => (manual = !open)} disabled={!hasBody} aria-expanded={open}>
-      <span class="status" class:running>
-        {#if running}
-          <span class="spinner"></span>
-        {:else if block.status === 'failed'}
-          <Icon name="close" size={13} />
-        {:else}
-          <Icon name={icon} size={13} />
-        {/if}
-      </span>
-      <span class="label gb-kicker">{block.label}</span>
-      <span class="target" title={target || undefined}>{target}</span>
-      {#if block.waiting}<span class="gb-tag">waiting</span>{/if}
-      {#if !block.readOnly}<span class="gb-tag mutating">writes</span>{/if}
-    </button>
-    {#if diff}
-      <button class="open" title="Open this edit in the diff editor" onclick={() => onOpenDiff(block.id)}
-        >diff</button
-      >
-    {/if}
-    {#if filePath}
+<div class="tool" class:stacked class:failed>
+  <div class="tool-row">
+    <div class="verb-col">
+      {#if indicatorState !== 'done'}
+        <span
+          class="indicator {indicatorState}"
+          aria-label={indicatorLabel}
+          title={indicatorLabel}
+        ></span>
+      {:else}
+        <span class="indicator done" aria-hidden="true"></span>
+      {/if}
+      {#if terminal}
+        <span class="verb-icon" aria-hidden="true"><Icon name="terminal" size={14} /></span>
+      {:else}
+        <span class="verb" class:mutating>{verb}</span>
+      {/if}
+    </div>
+
+    {#if filePath && shortPath}
       <button
-        class="open"
-        title="Open {filePath}"
-        onclick={() => onOpenPath(filePath, block.locations[0]?.line)}>open</button
+        type="button"
+        class="path"
+        title={filePath}
+        onclick={() => onOpenPath(filePath, block.locations[0]?.line)}
       >
+        {middleEllipsis(shortPath)}
+      </button>
+    {:else if terminal && command}
+      <span class="target terminal-cmd" title={command}>
+        <span class="sigil">$</span>
+        {command}
+      </span>
+    {:else}
+      <span class="target" title={displayTarget || undefined}>{displayTarget}</span>
     {/if}
+
+    <div class="actions">
+      {#if diff}
+        <button
+          type="button"
+          class="ghost-action"
+          title="Open this edit in the diff editor"
+          onclick={() => onOpenDiff(block.id)}>diff</button
+        >
+      {/if}
+      {#if filePath}
+        <button
+          type="button"
+          class="ghost-action"
+          title="Open {filePath}"
+          onclick={() => onOpenPath(filePath, block.locations[0]?.line)}>open</button
+        >
+      {/if}
+    </div>
   </div>
 
-  <!-- Preview only after the tool finishes — in-flight cards stay a single stable header row. -->
-  {#if showPeek && diff}
-    <button class="peek" onclick={() => (manual = true)} aria-label="Expand this edit">
-      <DiffView oldText={diff.oldText} newText={diff.newText} maxRows={6} preview />
-    </button>
-  {:else if showTail}
-    <div class="tail" title={tail}>{tail}</div>
+  {#if failed && block.error}
+    <div class="error-line">{block.error}</div>
   {/if}
 
-  {#if open}
-    <div class="body">
-      {#if block.error}
-        <div class="err">{block.error}</div>
-      {/if}
-      {#if diff}
+  {#if showTail}
+    <button type="button" class="subrow tail" title={tail} onclick={() => (manual = true)}>
+      {tail}
+    </button>
+  {/if}
+
+  {#if showDiffSub && diff && diffStats}
+    <div class="subrow">
+      <span class="diff-counts">
+        <span class="diff-add">+{diffStats.added}</span>
+        <span class="diff-del">−{diffStats.removed}</span>
+      </span>
+      <button type="button" class="ghost-action" onclick={toggleDiffPreview}>
+        {open ? 'collapse diff' : 'preview diff'}
+      </button>
+    </div>
+    {#if open}
+      <div class="sub-body">
         <DiffView oldText={diff.oldText} newText={diff.newText} />
+      </div>
+    {/if}
+  {/if}
+
+  {#if showTerminalOut}
+    <div class="sub-body">
+      <pre class="terminal-out" class:expanded={outputExpanded}>{body}</pre>
+      {#if body.split('\n').length > 12 || body.length > 800}
+        <button
+          type="button"
+          class="ghost-action show-all"
+          onclick={() => (outputExpanded = !outputExpanded)}
+        >
+          {outputExpanded ? 'collapse' : 'show all'}
+        </button>
       {/if}
-      <!-- The header truncates the command to one line, so an expanded run-command card repeats it
-           in full above its output. Otherwise the console block is all you see and the command
-           reads as a footnote *below* what it produced. -->
-      {#if terminal && command}
-        <pre class="cmd">{command}</pre>
+    </div>
+  {:else if showExpandedBody}
+    <div class="sub-body">
+      {#if body}
+        <pre class="terminal-out" class:expanded={outputExpanded}>{body}</pre>
+      {:else if Object.keys(input).length > 0}
+        <pre class="terminal-out dim">{JSON.stringify(input, null, 2)}</pre>
       {/if}
-      {#if body && !failed}
-        <pre class="out" class:terminal>{body}</pre>
-      {/if}
-      {#if !failed && !diff && !body && Object.keys(input).length > 0}
-        <pre class="out dim">{JSON.stringify(input, null, 2)}</pre>
-      {/if}
+      <button type="button" class="ghost-action show-all" onclick={() => (manual = false)}>
+        collapse
+      </button>
     </div>
   {/if}
 </div>
 
 <style>
   .tool {
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    background: var(--gb-surface);
-    overflow: hidden;
-  }
-
-  .tool.failed {
-    border-color: var(--gb-danger);
-  }
-
-  /* Spacing comes from transcript stack gap — no extra margin here. */
-  .tool.stacked {
-    margin-top: 0;
-  }
-
-  .head {
-    display: flex;
-    align-items: stretch;
-  }
-
-  .toggle {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
     min-width: 0;
-    padding: 9px 12px;
-    border: none;
-    background: none;
-    color: var(--vscode-foreground);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
   }
 
-  .toggle:disabled {
-    cursor: default;
-  }
-
-  .toggle:hover:not(:disabled) {
-    background: var(--vscode-list-hoverBackground);
-  }
-
-  .status {
-    flex: 0 0 auto;
+  /* One row metric only: padding 6px 0 on every tool row, stacked or not. */
+  .tool-row {
     display: flex;
     align-items: center;
-    color: var(--gb-accent);
-  }
-
-  .tool.failed .status {
-    color: var(--gb-danger);
-  }
-
-  .status.running {
-    color: var(--gb-accent);
+    gap: var(--space-2);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    min-width: 0;
   }
 
   /*
-   * Spinner is intentionally a bit louder than the rest of the chrome — write/search calls can
-   * finish in a blink, so the in-flight state needs to be obvious while it lasts.
+   * 56px of verb + permanently reserved 10px dot gutter. The dot is absolute so pending /
+   * running / failed never shift the verb text.
    */
-  .spinner {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid color-mix(in srgb, var(--gb-accent) 35%, transparent);
-    border-top-color: var(--gb-accent);
-    border-radius: 50%;
-    animation: spin 0.65s linear infinite;
+  .verb-col {
+    position: relative;
+    flex: 0 0 66px;
+    padding-left: 10px;
+    display: flex;
+    align-items: center;
+    text-align: left;
+    min-width: 0;
   }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
+  .indicator {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .indicator.pending {
+    border: 1px solid var(--text-faint);
+    background: transparent;
+  }
+
+  .indicator.running {
+    background-color: var(--accent);
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+
+  .indicator.done {
+    display: none;
+  }
+
+  .indicator.failed {
+    background-color: var(--danger);
+  }
+
+  .indicator.awaiting {
+    background-color: var(--warning);
+  }
+
+  @keyframes pulse {
+    0% {
+      opacity: 0.4;
+      transform: translateY(-50%) scale(0.9);
+    }
+    50% {
+      opacity: 1;
+      transform: translateY(-50%) scale(1.1);
+    }
+    100% {
+      opacity: 0.4;
+      transform: translateY(-50%) scale(0.9);
     }
   }
 
-  .tool:has(.status.running) {
-    border-color: color-mix(in srgb, var(--gb-accent) 45%, var(--gb-rule));
+  .verb {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    flex-shrink: 0;
+    line-height: 1;
   }
 
-  .label {
-    flex: 0 0 auto;
-    min-width: 4.5em;
+  .verb.mutating {
+    color: var(--text-muted);
   }
 
-  /* Always reserve the target slot so path/query arriving a beat later does not reflow the head. */
+  .verb-icon {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+  }
+
+  .path,
   .target {
     flex: 1 1 auto;
     min-width: 0;
-    min-height: 1.2em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--gb-dim);
-    font-family: var(--gb-mono);
-    font-size: 0.9em;
-  }
-
-  .target:empty::after {
-    content: '\00a0';
-  }
-
-  .mutating {
-    background: color-mix(in srgb, var(--gb-warn) 22%, transparent);
-    color: var(--vscode-foreground);
-  }
-
-  /* Flush right against the card edge, split off by a rule — the design's "open" affordance. */
-  .open {
-    flex: 0 0 auto;
-    border: none;
-    border-left: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    background: none;
-    color: var(--gb-accent);
-    font: inherit;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 0 11px;
-    cursor: pointer;
-  }
-
-  .open:hover {
-    background: var(--vscode-list-hoverBackground);
-  }
-
-  /*
-   * The preview is the whole click target — the point is that a glance at the change is always
-   * there and expanding it never needs aim. It carries no chrome of its own so it reads as part
-   * of the card rather than a control sitting inside one.
-   */
-  .peek {
-    display: block;
-    width: 100%;
-    padding: 0 12px 10px;
-    border: none;
-    background: none;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .peek:hover {
-    background: var(--vscode-list-hoverBackground);
-  }
-
-  /* One line of what the tool is producing, clipped — enough to follow a fast run, no more. */
-  .tail {
-    padding: 0 12px 10px 32px;
-    color: var(--gb-dim);
-    font-family: var(--gb-mono);
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
     line-height: 1.45;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-align: left;
   }
 
-  .tool.failed .tail {
-    color: var(--gb-danger);
+  .path {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: none;
   }
 
-  .body {
+  .path:hover {
+    text-decoration: underline;
+  }
+
+  /* Tool rows: focus = hover wash + 2px focus left edge, not a full ring. */
+  .path:focus-visible {
+    outline: none;
+    background-color: var(--bg-hover);
+    box-shadow: inset 2px 0 0 var(--focus);
+  }
+
+  .target {
+    color: var(--text);
+  }
+
+  .terminal-cmd {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .sigil {
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+
+  .actions {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 10px 12px 12px;
-    border-top: 1px solid var(--gb-rule);
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    margin-left: auto;
   }
 
-  /* Prompt-marked and accent-ruled so the command reads as input, not as more output. */
+  .ghost-action {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    line-height: 1.2;
+  }
+
+  .ghost-action:hover,
+  .ghost-action:focus-visible {
+    color: var(--text);
+    background-color: var(--bg-hover);
+  }
+
+  /* Sub-rows share one left edge: 10 + 56 + 8 = 74px (dot gutter + verb + gap). */
+  .subrow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-left: 74px;
+    margin-top: 4px;
+    font-size: 11.5px;
+    min-width: 0;
+  }
+
+  .subrow.tail {
+    display: block;
+    width: 100%;
+    border: none;
+    background: none;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+    cursor: pointer;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-right: 0;
+  }
+
+  .subrow.tail:hover {
+    color: var(--text-muted);
+  }
+
+  .diff-counts {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .diff-add {
+    color: var(--diff-add-text);
+  }
+
+  .diff-del {
+    color: var(--diff-del-text);
+  }
+
+  .error-line {
+    font-size: 11.5px;
+    color: var(--danger);
+    margin-top: 4px;
+    padding-left: 74px;
+    overflow-wrap: anywhere;
+  }
+
+  .sub-body {
+    padding-left: 74px;
+    margin-top: var(--space-2);
+    min-width: 0;
+  }
+
   .cmd {
-    margin: 0;
-    padding: 8px 10px;
-    border-left: 2px solid var(--gb-accent);
-    background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius-sm);
-    font-family: var(--gb-mono);
-    font-size: 11.5px;
-    line-height: 1.55;
+    margin: 0 0 var(--space-2);
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    color: var(--text);
   }
 
-  .cmd::before {
-    content: '$ ';
-    color: var(--gb-accent);
-    font-weight: 700;
-  }
-
-  .out {
+  .terminal-out {
     margin: 0;
-    max-height: 220px;
+    max-height: 12rem;
     overflow: auto;
-    padding: 10px 12px;
-    background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius-sm);
-    font-family: var(--gb-mono);
-    font-size: 11.5px;
-    line-height: 1.55;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-inset);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    color: var(--text-muted);
   }
 
-  /*
-   * Command output belongs on a console ground, not the editor's code-block tint — but the mock's
-   * hardcoded near-black would be a hole in a light theme, so it comes from the terminal's own
-   * theme colours and lands right in both.
-   */
-  .out.terminal {
-    background: var(--vscode-terminal-background, var(--vscode-panel-background, var(--gb-surface-sunken)));
-    color: var(--vscode-terminal-foreground, inherit);
+  .terminal-out.expanded {
+    max-height: none;
   }
 
-  .out.dim {
-    color: var(--gb-dim);
+  .terminal-out.dim {
+    color: var(--text-faint);
   }
 
-  .err {
-    color: var(--gb-danger);
-    font-size: 0.9em;
-    font-weight: 600;
-    line-height: 1.4;
+  .show-all {
+    margin-top: 4px;
+    padding-left: 0;
   }
 </style>

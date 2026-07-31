@@ -2,17 +2,24 @@
   import type { ApprovalBlock, ApprovalDecision } from '../../src/shared/protocol';
   import DiffView from './DiffView.svelte';
   import Icon from './Icon.svelte';
+  import { middleEllipsis, shortenPath } from '../paths';
 
   interface Props {
     block: ApprovalBlock;
+    /** Workspace root, so the target reads like an editor tab instead of an absolute path. */
+    cwd?: string;
+    onOpenPath: (path: string, line?: number) => void;
     onDecide: (requestId: string, decision: ApprovalDecision) => void;
   }
 
-  let { block, onDecide }: Props = $props();
+  let { block, cwd, onOpenPath, onDecide }: Props = $props();
 
   const request = $derived(block.request);
   const answered = $derived(block.decision !== undefined);
   const isNew = $derived(request.kind === 'write' && request.oldText === undefined);
+  /* Same shortening as the transcript's tool rows — one file, one way of writing it. */
+  const writePath = $derived(request.kind === 'write' ? request.path : undefined);
+  const shortPath = $derived(writePath ? shortenPath(writePath, cwd) : undefined);
 
   const decisionLabel: Record<ApprovalDecision, string> = {
     once: 'Allowed once',
@@ -27,131 +34,199 @@
   }
 </script>
 
-<div class="approval" class:answered class:rejected={block.decision === 'reject' || block.decision === 'rejectAlways'}>
-  <div class="head">
-    <span class="mark"><Icon name="warning" size={14} /></span>
-    <span class="title">{request.title}</span>
+<div class="gb-approval-card" class:answered class:rejected={block.decision === 'reject' || block.decision === 'rejectAlways'}>
+  <div class="gb-approval-title">
+    {#if answered && (block.decision === 'once' || block.decision === 'always')}
+      <Icon name="check" size={16} />
+    {:else}
+      <Icon name="warning" size={16} />
+    {/if}
+    <span>{request.title}</span>
     {#if answered}
-      <span class="verdict gb-meta">{decisionLabel[block.decision!]}</span>
+      <span class="gb-verdict-line">{decisionLabel[block.decision!]}</span>
     {/if}
   </div>
 
   {#if request.kind === 'command'}
-    <pre class="cmd">{request.command}</pre>
-    {#if request.cwd}<div class="cwd">in {request.cwd}</div>{/if}
+    <div class="gb-approval-target">$ {request.command}</div>
+    {#if request.cwd}<div class="gb-approval-meta">cwd: {request.cwd}</div>{/if}
   {:else if request.kind === 'write'}
-    <div class="path">{request.path}{isNew ? ' (new file)' : ''}</div>
+    {#if writePath && shortPath}
+      <div class="gb-approval-target is-path">
+        {#if isNew}
+          <!-- Nothing to open yet: the file only exists once the write is approved. -->
+          <span class="gb-approval-path is-static" title={writePath}>{middleEllipsis(shortPath)}</span>
+          <span class="gb-approval-flag">new file</span>
+        {:else}
+          <button
+            type="button"
+            class="gb-approval-path"
+            title={writePath}
+            onclick={() => onOpenPath(writePath)}
+          >
+            {middleEllipsis(shortPath)}
+          </button>
+        {/if}
+      </div>
+    {/if}
     <DiffView oldText={request.oldText ?? null} newText={request.newText ?? ''} maxRows={24} />
   {:else if request.agentOptions?.length}
-    <div class="path">The agent asked for permission.</div>
+    <div class="gb-approval-target">The agent asked for permission.</div>
   {/if}
 
   {#if !answered}
-    <div class="actions">
-      <button class="gb-btn primary" onclick={() => decide('once')}>
+    <div class="gb-action-group">
+      <button class="gb-btn-primary" onclick={() => decide('once')}>
         {request.kind === 'command' ? 'Run' : 'Apply'}
       </button>
-      <button class="gb-btn ghost" onclick={() => decide('always')} title={request.alwaysScope}>
+      <button class="gb-btn-secondary" onclick={() => decide('always')} title={request.alwaysScope}>
         {request.kind === 'command' ? 'Always allow' : 'Accept all edits'}
       </button>
-      <button class="gb-btn ghost danger" onclick={() => decide('reject')}>Reject</button>
+      <button class="gb-btn-ghost" onclick={() => decide('reject')}>Reject</button>
       {#if request.kind === 'command'}
-        <button class="gb-btn ghost danger" onclick={() => decide('rejectAlways')} title={request.alwaysScope}>
+        <button class="gb-btn-ghost-danger" onclick={() => decide('rejectAlways')} title={request.alwaysScope}>
           Never
         </button>
       {/if}
     </div>
     {#if request.alwaysScope}
-      <div class="scope">“Always” remembers <code>{request.alwaysScope}</code> until the agent restarts.</div>
+      <div class="gb-approval-meta">“Always” remembers <code>{request.alwaysScope}</code> until the agent restarts.</div>
     {/if}
   {/if}
 </div>
 
 <style>
-  /* The one card that must stop the eye: a 2px frame and a tinted ground, per the design. */
-  .approval {
+  /* Level 2 — Interrupt: 2px left border in --warning or --danger, 1px --border on other sides */
+  .gb-approval-card {
+    background-color: var(--bg-raised);
+    border-left: 2px solid var(--warning);
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: 7px;
-    padding: 9px 10px;
-    border: 2px solid var(--gb-warn);
-    border-radius: var(--gb-radius);
-    background: color-mix(in srgb, var(--gb-warn) 8%, var(--gb-surface));
+    gap: var(--space-3);
   }
 
-  .approval.answered {
-    border-color: var(--gb-rule);
-    background: var(--gb-surface);
-    opacity: 0.75;
+  .gb-approval-card.answered {
+    border-left-color: var(--border);
+    opacity: 1;
   }
 
-  .approval.rejected {
-    border-color: var(--gb-danger);
+  .gb-approval-card.rejected {
+    border-left-color: var(--danger);
   }
 
-  .head {
+  .gb-approval-title {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: var(--space-2);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
   }
 
-  .mark {
-    display: flex;
-    align-items: center;
-    color: var(--gb-warn);
+  .gb-approval-title :global(svg) {
+    color: var(--warning);
+    flex-shrink: 0;
   }
 
-  .approval.answered .mark {
-    color: var(--gb-dim);
+  .gb-approval-card.answered .gb-approval-title :global(svg) {
+    color: var(--success);
   }
 
-  .title {
+  .gb-approval-card.rejected .gb-approval-title :global(svg) {
+    color: var(--danger);
+  }
+
+  .gb-approval-title span:nth-child(2) {
     flex: 1 1 auto;
-    font-weight: 600;
-    font-size: 12.5px;
   }
 
-  .verdict {
-    flex: 0 0 auto;
+  .gb-verdict-line {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
   }
 
-  .cmd {
-    margin: 0;
-    padding: 6px 8px;
-    background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius);
-    font-family: var(--gb-mono);
-    font-size: 11.5px;
-    line-height: 1.55;
-    white-space: pre-wrap;
+  .gb-approval-target {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
     overflow-wrap: anywhere;
   }
 
-  .cwd,
-  .scope {
-    font-family: var(--gb-mono);
-    font-size: var(--gb-meta-size);
-    color: var(--gb-dim);
-  }
-
-  .path {
-    font-family: var(--gb-mono);
-    font-size: var(--gb-meta-size);
-    color: var(--gb-dim);
-    overflow-wrap: anywhere;
-  }
-
-  .actions {
+  /* Only the file row is a single line; a command still wraps as many lines as it needs. */
+  .gb-approval-target.is-path {
     display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
   }
 
-  .danger {
-    color: var(--gb-danger);
+  /*
+   * The file, written the way the transcript's tool rows write it: workspace-relative and
+   * middle-ellipsised on one line. It used to be the raw absolute path, which repeated the title
+   * and wrapped to three lines at 380px. Clicking it opens the file, same affordance as a tool row.
+   */
+  .gb-approval-path {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: var(--accent);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    cursor: pointer;
+  }
+
+  .gb-approval-path.is-static {
+    cursor: default;
+  }
+
+  .gb-approval-path:not(.is-static):hover {
+    text-decoration: underline;
+  }
+
+  .gb-approval-flag {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .gb-approval-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .gb-action-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+
+
+
+
+
+
+
+
+  button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 
   code {
-    font-family: var(--gb-mono);
+    font-family: var(--font-mono);
   }
 </style>

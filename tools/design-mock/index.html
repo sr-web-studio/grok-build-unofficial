@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<!-- Note: For this design mock, Inter and JetBrains Mono are loaded from Google Fonts CDN. In the real extension, woff2 fonts are bundled locally in media/fonts/. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok Build UI Design System Mock</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="mock.css">
+  <script src="mock.js" defer></script>
+</head>
+<body>
+
+  <!-- Inline SVG Icon Definitions Template -->
+  <svg style="display: none;">
+    <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="icon-rewind" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/></symbol>
+    <symbol id="icon-restart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="icon-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></symbol>
+    <symbol id="icon-ellipsis" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></symbol>
+    <symbol id="icon-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+    <symbol id="icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></symbol>
+    <symbol id="icon-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></symbol>
+    <symbol id="icon-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></symbol>
+    <symbol id="icon-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><polyline points="14 2 14 8 20 8"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></symbol>
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></symbol>
+    <symbol id="icon-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+    <symbol id="icon-paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57a4 4 0 0 1 5.66 5.66l-8.59 8.58a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+    <symbol id="icon-arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><polyline points="19 12 12 19 5 12"/></symbol>
+    <symbol id="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  </svg>
+
+  <div class="mock-app">
+
+    <!-- Left Rail MOCK NAV -->
+    <nav class="mock-nav">
+      <div class="mock-nav-title">MOCK NAV <span class="mock-nav-tag">NOT DESIGN</span></div>
+      <ul class="mock-nav-list">
+        <li><a href="#section-a" class="mock-nav-link">Section A — Foundations</a></li>
+        <li><a href="#section-b" class="mock-nav-link">Section B — Main Chat (400px Dark)</a></li>
+        <li><a href="#section-c" class="mock-nav-link">Section C — Main Chat (400px Light)</a></li>
+        <li><a href="#section-d" class="mock-nav-link">Section D — Wide Panel (900px Dark)</a></li>
+        <li><a href="#section-e" class="mock-nav-link">Section E — Interactive States</a></li>
+        <li><a href="#section-f" class="mock-nav-link">Section F — Modals & Popovers</a></li>
+        <li><a href="#section-g" class="mock-nav-link">Section G — Empty / First-Run</a></li>
+      </ul>
+      <button id="global-theme-toggle" class="mock-theme-toggle-btn">
+        <svg width="14" height="14"><use href="#icon-sun"/></svg> Toggle Global Theme
+      </button>
+    </nav>
+
+    <!-- Main Content Canvas -->
+    <main class="mock-content">
+
+      <!-- ================= SECTION A: FOUNDATIONS ================= -->
+      <section id="section-a" class="mock-section">
+        <div class="mock-section-header">
+          <h2 class="mock-section-title">Section A — Foundations</h2>
+          <p class="mock-section-desc">Token palette swatches, type scale specimens, space/radius/shadow metrics, and accessibility focus ring specimens.</p>
+        </div>
+
+        <h3 style="font-size: 14px; color: #FFF; margin-top: 8px;">1. Color Tokens Swatch Grid</h3>
+        <div class="specimen-grid">
+          <!-- Swatches -->
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--bg); border-bottom: 1px solid #333;"></div><div class="swatch-info"><div class="swatch-name">--bg</div><div class="swatch-hex">#0A0A0A / #FFFFFF</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--bg-raised); border-bottom: 1px solid #333;"></div><div class="swatch-info"><div class="swatch-name">--bg-raised</div><div class="swatch-hex">#141414 / #F7F7F7</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--bg-inset); border-bottom: 1px solid #333;"></div><div class="swatch-info"><div class="swatch-name">--bg-inset</div><div class="swatch-hex">#1C1C1C / #F0F0F0</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--bg-hover); border-bottom: 1px solid #333;"></div><div class="swatch-info"><div class="swatch-name">--bg-hover</div><div class="swatch-hex">#1F1F1F / #EDEDED</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--bg-active); border-bottom: 1px solid #333;"></div><div class="swatch-info"><div class="swatch-name">--bg-active</div><div class="swatch-hex">#262626 / #E4E4E4</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--border);"></div><div class="swatch-info"><div class="swatch-name">--border</div><div class="swatch-hex">#242424 / #E6E6E6</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--border-strong);"></div><div class="swatch-info"><div class="swatch-name">--border-strong</div><div class="swatch-hex">#333333 / #D2D2D2</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--text);"></div><div class="swatch-info"><div class="swatch-name">--text</div><div class="swatch-hex">#F5F5F5 / #111111</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--text-muted);"></div><div class="swatch-info"><div class="swatch-name">--text-muted</div><div class="swatch-hex">#A1A1A1 / #5C5C5C</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--text-faint);"></div><div class="swatch-info"><div class="swatch-name">--text-faint</div><div class="swatch-hex">#6E6E6E / #8A8A8A</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--accent);"></div><div class="swatch-info"><div class="swatch-name">--accent</div><div class="swatch-hex">#1D9BF0 / #0B7FD4</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--accent-subtle);"></div><div class="swatch-info"><div class="swatch-name">--accent-subtle</div><div class="swatch-hex">#0E2A3D / #E4F2FC</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--success);"></div><div class="swatch-info"><div class="swatch-name">--success</div><div class="swatch-hex">#3FB950 / #1A7F37</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--warning);"></div><div class="swatch-info"><div class="swatch-name">--warning</div><div class="swatch-hex">#D29922 / #9A6700</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--danger);"></div><div class="swatch-info"><div class="swatch-name">--danger</div><div class="swatch-hex">#F85149 / #CF222E</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--diff-add-bg);"></div><div class="swatch-info"><div class="swatch-name">--diff-add-bg</div><div class="swatch-hex">#0D2B18 / #E6FFEC</div></div></div>
+          <div class="swatch-card"><div class="swatch-box" style="background: var(--diff-del-bg);"></div><div class="swatch-info"><div class="swatch-name">--diff-del-bg</div><div class="swatch-hex">#33151A / #FFEBE9</div></div></div>
+        </div>
+
+        <h3 style="font-size: 14px; color: #FFF; margin-top: 16px;">2. Type Scale Specimen Table</h3>
+        <table class="specimen-table">
+          <thead>
+            <tr><th>Role</th><th>Family</th><th>Size</th><th>Line Height</th><th>Weight</th><th>Tracking</th><th>Sample Render</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Markdown body</td><td>Inter</td><td>13.5px</td><td>1.70</td><td>400</td><td>0</td><td style="font-size: 13.5px; line-height: 1.70;">The transcript is a document, not a dashboard. Prose is primary.</td></tr>
+            <tr><td>Markdown h1</td><td>Inter</td><td>17px</td><td>1.35</td><td>600</td><td>-0.01em</td><td style="font-size: 17px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em;">Heading Level 1 Title</td></tr>
+            <tr><td>Markdown h2</td><td>Inter</td><td>15.5px</td><td>1.35</td><td>600</td><td>-0.01em</td><td style="font-size: 15.5px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em;">Heading Level 2 Subtitle</td></tr>
+            <tr><td>Markdown h3</td><td>Inter</td><td>14px</td><td>1.35</td><td>600</td><td>-0.01em</td><td style="font-size: 14px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em;">Heading Level 3 Section</td></tr>
+            <tr><td>List item</td><td>Inter</td><td>13.5px</td><td>1.65</td><td>400</td><td>0</td><td style="font-size: 13.5px; line-height: 1.65;">• Item in ordered or unordered list</td></tr>
+            <tr><td>Inline code</td><td>JetBrains Mono</td><td>12.5px</td><td>inherit</td><td>400</td><td>0</td><td style="font-family: var(--font-mono); font-size: 12.5px;">const session = new SessionHost();</td></tr>
+            <tr><td>Code block</td><td>JetBrains Mono</td><td>12.5px</td><td>1.55</td><td>400</td><td>0</td><td style="font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55;">function reconnect() { return backoff.next(); }</td></tr>
+            <tr><td>Tool row label</td><td>Inter</td><td>11px</td><td>1.0</td><td>600</td><td>0.06em</td><td style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint);">READ</td></tr>
+            <tr><td>Tool row path</td><td>JetBrains Mono</td><td>12.5px</td><td>1.45</td><td>400</td><td>0</td><td style="font-family: var(--font-mono); font-size: 12.5px; line-height: 1.45; color: var(--accent);">src/acp/client.ts</td></tr>
+            <tr><td>Terminal output</td><td>JetBrains Mono</td><td>12px</td><td>1.5</td><td>400</td><td>0</td><td style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5;">$ tsc --noEmit — 0 errors</td></tr>
+            <tr><td>Chrome / buttons</td><td>Inter</td><td>12px</td><td>1.2</td><td>500</td><td>0</td><td style="font-size: 12px; font-weight: 500;">Bypass Permissions</td></tr>
+            <tr><td>Meta / status line</td><td>Inter</td><td>11.5px</td><td>1.3</td><td>400</td><td>0.01em</td><td style="font-size: 11.5px; line-height: 1.3; color: var(--text-muted);">ready · refactor-acp · ctx 11% · $0.0012</td></tr>
+            <tr><td>Modal title</td><td>Inter</td><td>14px</td><td>1.3</td><td>600</td><td>-0.01em</td><td style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">Session History</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="font-size: 14px; color: #FFF; margin-top: 16px;">3. Accessibility Focus Ring Specimens</h3>
+        <div style="background-color: var(--bg-raised); padding: var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--border-strong); display: flex; flex-direction: column; gap: var(--space-3); width: 400px;">
+          <div>
+            <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Primary Button Focus (Outline 2px solid --focus):</span>
+            <button class="gb-btn-primary" style="outline: 2px solid var(--focus); outline-offset: 2px;">Apply Edits</button>
+          </div>
+          <div>
+            <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Path Link Focus (Outline 2px solid --focus):</span>
+            <a href="#" class="gb-tool-path" style="outline: 2px solid var(--focus); outline-offset: 2px; display: inline-block; padding: 2px 4px; border-radius: 2px;">src/acp/client.ts</a>
+          </div>
+          <div>
+            <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Input Field Focus (1px --focus border + 1px outline offset 0):</span>
+            <input type="text" class="gb-question-input" value="Focus active state..." style="border-color: var(--focus); outline: 1px solid var(--focus); outline-offset: 0;">
+          </div>
+          <div>
+            <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Tool Row Focus (--bg-hover + 2px --focus left edge):</span>
+            <div class="gb-tool-row" style="background-color: var(--bg-hover); border-left: 2px solid var(--focus); padding-left: 6px;">
+              <div class="gb-tool-verb-col"><span class="gb-tool-verb">READ</span></div>
+              <a href="#" class="gb-tool-path">src/host/session.ts</a>
+              <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+            </div>
+          </div>
+          <div>
+            <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">List Row Focus (--bg-hover + 2px --focus left edge):</span>
+            <div class="gb-history-row" style="background-color: var(--bg-hover); border-left: 2px solid var(--focus); padding-left: 6px;">
+              <span style="font-weight: 500;">refactor-acp-client</span>
+              <span style="color: var(--accent); font-size: 11px;">current</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SECTION B: MAIN CHAT 400px DARK ================= -->
+      <section id="section-b" class="mock-section">
+        <div class="mock-section-header">
+          <h2 class="mock-section-title">Section B — Main Chat (400px Wide, Dark)</h2>
+          <p class="mock-section-desc">Primary 400px sidebar webview frame rendering realistic complete transcript sequence in dark mode.</p>
+        </div>
+
+        <div class="mock-frame-container">
+          <!-- 400px Main Frame Dark -->
+          <div class="mock-frame" data-width="400" data-theme="dark">
+
+            <!-- 1. Header -->
+            <div class="gb-header">
+              <div class="gb-header-brand">
+                <span class="gb-wordmark">◆ GROK BUILD</span>
+                <span class="gb-unofficial-tag">unofficial</span>
+              </div>
+              <div class="gb-header-actions">
+                <button class="gb-icon-btn" title="Toggle Theme"><svg width="16" height="16"><use href="#icon-sun"/></svg></button>
+                <button class="gb-icon-btn" title="New Session"><svg width="16" height="16"><use href="#icon-plus"/></svg></button>
+                <button class="gb-icon-btn" title="Session History"><svg width="16" height="16"><use href="#icon-clock"/></svg></button>
+                <button class="gb-icon-btn" title="Rewind Checkpoints"><svg width="16" height="16"><use href="#icon-rewind"/></svg></button>
+                <button class="gb-icon-btn" title="Toggle Reasoning"><svg width="16" height="16"><use href="#icon-sparkles"/></svg></button>
+                <button class="gb-icon-btn" title="More Options"><svg width="16" height="16"><use href="#icon-ellipsis"/></svg></button>
+              </div>
+            </div>
+
+            <!-- 2. Status Line -->
+            <div class="gb-status-line">
+              <div class="gb-status-left">
+                <span class="gb-state-dot idle"></span>
+                <span class="gb-status-label">ready</span>
+                <span class="gb-status-sep gb-sep-title">·</span>
+                <span class="gb-status-title" title="refactor-acp-client">refactor-acp-client</span>
+                <span class="gb-status-sep gb-sep-folder">·</span>
+                <span class="gb-status-folder" title="grok-build-unofficial">grok-build-unofficial</span>
+              </div>
+              <div class="gb-status-right">
+                <div class="gb-ctx-badge" title="Context usage 11%">
+                  <span>ctx 11%</span>
+                  <div class="gb-ctx-meter"><div class="gb-ctx-fill" style="width: 11%;"></div></div>
+                </div>
+                <span class="gb-status-sep gb-sep-tokens">·</span>
+                <span class="gb-status-tokens">15k tok</span>
+                <span class="gb-status-sep gb-sep-cost">·</span>
+                <span class="gb-status-cost">$0.0042</span>
+                <span class="gb-status-sep gb-sep-ver">·</span>
+                <span class="gb-status-ver">0.2.114</span>
+              </div>
+            </div>
+
+            <!-- Main Transcript Area -->
+            <div class="gb-transcript">
+
+              <!-- 3. User Message -->
+              <div class="gb-user-msg" data-prompt="Can you inspect src/acp/client.ts and refactor the reconnection exponential backoff handling to prevent lockups during network switches?">
+                <div class="gb-user-text">Can you inspect <code>src/acp/client.ts</code> and refactor the reconnection exponential backoff handling to prevent lockups during network switches?</div>
+                <button class="gb-msg-copy-user" title="Copy prompt" aria-label="Copy prompt"><svg width="12" height="12"><use href="#icon-copy"/></svg></button>
+              </div>
+
+              <!-- 4. Collapsed Reasoning Row -->
+              <div class="gb-thought-block">
+                <div class="gb-thought-row gb-thought-toggle">
+                  <svg width="12" height="12" style="color: var(--text-faint);"><use href="#icon-sparkles"/></svg>
+                  <span class="gb-thought-label">Thought</span>
+                  <span class="gb-thought-meta">· 2.4s · 30 words</span>
+                  <svg width="12" height="12" style="margin-left: auto; color: var(--text-faint);"><use href="#icon-chevron"/></svg>
+                </div>
+                <div class="gb-thought-expanded" style="display: none;">
+                  Examining network reconnection handlers inside ACP client. Calculating exponential backoff jitter values to avoid thundering herd problem.
+                </div>
+              </div>
+
+              <!-- 5. Assistant Markdown Prose -->
+              <div class="gb-prose-container">
+                <div class="gb-prose" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`. Currently, when the socket drops unexpectedly, the retry loop invokes `reconnect()` synchronously without jitter compensation.&#10;&#10;To fix this, we need to update the backoff configuration:&#10;- Cap max delay at **30,000ms**&#10;- Inject uniform random jitter (±20%) on every retry attempt&#10;- Reset retry counter immediately upon successful handshakes">
+                  <p>I have analyzed the reconnection logic inside <a href="#">src/acp/client.ts</a>. Currently, when the socket drops unexpectedly, the retry loop invokes <code>reconnect()</code> synchronously without jitter compensation.</p>
+                  <p>To fix this, we need to update the backoff configuration:</p>
+                  <ul>
+                    <li>Cap max delay at <strong>30,000ms</strong></li>
+                    <li>Inject uniform random jitter (±20%) on every retry attempt</li>
+                    <li>Reset retry counter immediately upon successful handshakes</li>
+                  </ul>
+                </div>
+                <div class="gb-assistant-actions">
+                  <button class="gb-msg-copy-assistant" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`. Currently, when the socket drops unexpectedly, the retry loop invokes `reconnect()` synchronously without jitter compensation.&#10;&#10;To fix this, we need to update the backoff configuration:&#10;- Cap max delay at **30,000ms**&#10;- Inject uniform random jitter (±20%) on every retry attempt&#10;- Reset retry counter immediately upon successful handshakes" title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                </div>
+              </div>
+
+              <!-- 6. Four Consecutive Tool Rows (READ, READ, SEARCH, LIST) -->
+              <div style="display: flex; flex-direction: column;">
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator done"></span>
+                    <span class="gb-tool-verb">READ</span>
+                  </div>
+                  <a href="#" class="gb-tool-path" title="src/acp/client.ts">src/acp/client.ts</a>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+
+                <div class="gb-tool-stacked">
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb">READ</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="src/host/session.ts">src/host/session.ts</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb">SEARCH</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="reconnectInBackoff">reconnectInBackoff</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb">LIST</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="src/acp/">src/acp/</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 7. EDIT Row with +12 -3 Counts and Expanded Inline Diff -->
+              <div class="gb-tool-container">
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator done"></span>
+                    <span class="gb-tool-verb mutating">EDIT</span>
+                  </div>
+                  <a href="#" class="gb-tool-path" title="webview/App.svelte">webview/App.svelte</a>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+                <div class="gb-tool-subrow">
+                  <span class="gb-diff-counts"><span class="gb-diff-add">+12</span> <span class="gb-diff-del">−3</span></span>
+                  <button class="gb-btn-ghost-action gb-diff-toggle">collapse diff</button>
+                </div>
+
+                <div class="gb-diff-view">
+                  <div class="gb-diff-line same"><span class="gb-diff-num old">142</span><span class="gb-diff-num new">142</span><span class="gb-diff-content">  async function handleReconnect() {</span></div>
+                  <div class="gb-diff-line del"><span class="gb-diff-num old">143</span><span class="gb-diff-num new"></span><span class="gb-diff-content">-   await delay(this.backoffMs);</span></div>
+                  <div class="gb-diff-line del"><span class="gb-diff-num old">144</span><span class="gb-diff-num new"></span><span class="gb-diff-content">-   this.backoffMs *= 2;</span></div>
+                  <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">143</span><span class="gb-diff-content">+   const jitter = 0.8 + Math.random() * 0.4;</span></div>
+                  <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">144</span><span class="gb-diff-content">+   const delayMs = Math.min(30000, this.backoffMs * jitter);</span></div>
+                  <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">145</span><span class="gb-diff-content">+   await delay(delayMs);</span></div>
+                  <div class="gb-diff-line same"><span class="gb-diff-num old">145</span><span class="gb-diff-num new">146</span><span class="gb-diff-content">    return this.connect();</span></div>
+                  <div class="gb-diff-gap"><span class="gb-diff-gutter-span">@@ −147,5 +148,8 @@</span><span class="gb-diff-content">Show more unchanged lines</span></div>
+                </div>
+              </div>
+
+              <!-- 8. Terminal Row -->
+              <div class="gb-tool-container">
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator done"></span>
+                    <svg width="14" height="14" style="color: var(--text-muted);"><use href="#icon-terminal"/></svg>
+                  </div>
+                  <span class="gb-terminal-cmd"><span class="gb-terminal-sigil">$</span> npm run typecheck</span>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+                <div class="gb-terminal-block">
+                  <div class="gb-terminal-out">&gt; tsc --noEmit — 0 errors found.</div>
+                </div>
+              </div>
+
+              <!-- 9. Failed WRITE Row -->
+              <div>
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator failed"></span>
+                    <span class="gb-tool-verb mutating">WRITE</span>
+                  </div>
+                  <a href="#" class="gb-tool-path" title="src/acp/config.ts">src/acp/config.ts</a>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+                <div class="gb-tool-error-line">EACCES: permission denied, open 'src/acp/config.ts'</div>
+              </div>
+
+              <!-- 10. More Assistant Prose (Rhythm Resumes) -->
+              <div class="gb-prose-container">
+                <div class="gb-prose" data-markdown="The typecheck passed cleanly. The exponential backoff with jitter is now active for all incoming socket connection drops.">
+                  <p>The typecheck passed cleanly. The exponential backoff with jitter is now active for all incoming socket connection drops.</p>
+                </div>
+                <div class="gb-assistant-actions">
+                  <button class="gb-msg-copy-assistant" data-markdown="The typecheck passed cleanly. The exponential backoff with jitter is now active for all incoming socket connection drops." title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                </div>
+              </div>
+
+              <!-- 11. Turn Footer -->
+              <div class="gb-turn-footer">
+                <span>↑1.2k ↓450 · 3.5s · $0.0012</span>
+              </div>
+
+              <!-- 14. Scroll to Latest Pill -->
+              <div class="gb-scroll-pill">
+                <svg width="12" height="12"><use href="#icon-arrow-down"/></svg> Latest
+              </div>
+
+            </div>
+
+            <!-- 12. Plan Dock (Collapsed) -->
+            <div class="gb-plan-dock" style="margin: 0 12px 8px 12px;">
+              <div class="gb-plan-dock-header">
+                <div class="gb-plan-dock-title">
+                  <svg width="12" height="12" style="color: var(--text-faint);"><use href="#icon-chevron"/></svg>
+                  <span class="gb-plan-kicker">PLAN</span>
+                  <span class="gb-plan-count">3/3</span>
+                  <div class="gb-plan-meter"><div class="gb-plan-fill complete" style="width: 100%;"></div></div>
+                </div>
+                <span class="gb-plan-step-summary">Refactor reconnection exponential backoff</span>
+              </div>
+            </div>
+
+            <!-- 13. Composer -->
+            <div class="gb-composer" style="margin: 0 12px 12px 12px;">
+              <textarea class="gb-textarea" placeholder="Ask, paste a screenshot, or / for commands…"></textarea>
+              <div class="gb-composer-toolbar">
+                <div class="gb-toolbar-left">
+                  <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-model"><span class="gb-model-name">Grok 4.5</span> <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-effort">Medium <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                </div>
+                <button class="gb-btn-primary">Send</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 280px Floor Test Container -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">280px Minimum Sidebar Floor Check</div>
+            <div class="mock-frame" data-width="280" data-theme="dark">
+              <!-- Header -->
+              <div class="gb-header">
+                <div class="gb-header-brand"><span class="gb-wordmark">◆ GROK BUILD</span></div>
+                <div class="gb-header-actions"><button class="gb-icon-btn"><svg width="14" height="14"><use href="#icon-plus"/></svg></button></div>
+              </div>
+              <!-- Status Line -->
+              <div class="gb-status-line">
+                <div class="gb-status-left">
+                  <span class="gb-state-dot idle"></span>
+                  <span class="gb-status-label">ready</span>
+                  <span class="gb-status-sep gb-sep-title">·</span>
+                  <span class="gb-status-title" title="refactor-acp-client">refactor-acp-client</span>
+                  <span class="gb-status-sep gb-sep-folder">·</span>
+                  <span class="gb-status-folder" title="grok-build-unofficial">grok-build-unofficial</span>
+                </div>
+                <div class="gb-status-right">
+                  <div class="gb-ctx-badge" title="Context usage 11%">
+                    <span>ctx 11%</span>
+                    <div class="gb-ctx-meter"><div class="gb-ctx-fill" style="width: 11%;"></div></div>
+                  </div>
+                  <span class="gb-status-sep gb-sep-tokens">·</span>
+                  <span class="gb-status-tokens">15k tok</span>
+                  <span class="gb-status-sep gb-sep-cost">·</span>
+                  <span class="gb-status-cost">$0.0042</span>
+                  <span class="gb-status-sep gb-sep-ver">·</span>
+                  <span class="gb-status-ver">0.2.114</span>
+                </div>
+              </div>
+              <!-- Identical Transcript -->
+              <div class="gb-transcript" style="padding: 8px;">
+                <div class="gb-user-msg" data-prompt="Can you inspect src/acp/client.ts and refactor the reconnection exponential backoff handling to prevent lockups during network switches?">
+                  <div class="gb-user-text">Can you inspect <code>src/acp/client.ts</code> and refactor the reconnection exponential backoff handling to prevent lockups during network switches?</div>
+                  <button class="gb-msg-copy-user" title="Copy prompt" aria-label="Copy prompt"><svg width="12" height="12"><use href="#icon-copy"/></svg></button>
+                </div>
+
+                <div class="gb-thought-block">
+                  <div class="gb-thought-row gb-thought-toggle">
+                    <svg width="12" height="12" style="color: var(--text-faint);"><use href="#icon-sparkles"/></svg>
+                    <span class="gb-thought-label">Thought</span>
+                    <span class="gb-thought-meta">· 2.4s</span>
+                    <svg width="12" height="12" style="margin-left: auto; color: var(--text-faint);"><use href="#icon-chevron"/></svg>
+                  </div>
+                  <div class="gb-thought-expanded" style="display: none;">
+                    Examining network reconnection handlers inside ACP client.
+                  </div>
+                </div>
+
+                <div class="gb-prose-container">
+                  <div class="gb-prose" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`.">
+                    <p>I have analyzed the reconnection logic inside <a href="#">src/acp/client.ts</a>.</p>
+                  </div>
+                  <div class="gb-assistant-actions">
+                    <button class="gb-msg-copy-assistant" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`." title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                  </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column;">
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb">READ</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="src/acp/client.ts">src/acp/client.ts</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+                  <div class="gb-tool-stacked">
+                    <div class="gb-tool-row">
+                      <div class="gb-tool-verb-col">
+                        <span class="gb-tool-indicator done"></span>
+                        <span class="gb-tool-verb">READ</span>
+                      </div>
+                      <a href="#" class="gb-tool-path" title="src/host/session.ts">src/host/session.ts</a>
+                      <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                    </div>
+                    <div class="gb-tool-row">
+                      <div class="gb-tool-verb-col">
+                        <span class="gb-tool-indicator done"></span>
+                        <span class="gb-tool-verb">SEARCH</span>
+                      </div>
+                      <a href="#" class="gb-tool-path" title="reconnectInBackoff">reconnectInBackoff</a>
+                      <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                    </div>
+                    <div class="gb-tool-row">
+                      <div class="gb-tool-verb-col">
+                        <span class="gb-tool-indicator done"></span>
+                        <span class="gb-tool-verb">LIST</span>
+                      </div>
+                      <a href="#" class="gb-tool-path" title="src/acp/">src/acp/</a>
+                      <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="gb-tool-container">
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb mutating">EDIT</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="webview/App.svelte">webview/App.svelte</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+                  <div class="gb-tool-subrow">
+                    <span class="gb-diff-counts"><span class="gb-diff-add">+12</span> <span class="gb-diff-del">−3</span></span>
+                    <button class="gb-btn-ghost-action gb-diff-toggle">collapse diff</button>
+                  </div>
+                  <div class="gb-diff-view">
+                    <div class="gb-diff-line same"><span class="gb-diff-num old">142</span><span class="gb-diff-num new">142</span><span class="gb-diff-content">  async function handleReconnect() {</span></div>
+                    <div class="gb-diff-line del"><span class="gb-diff-num old">143</span><span class="gb-diff-num new"></span><span class="gb-diff-content">-   await delay(this.backoffMs);</span></div>
+                    <div class="gb-diff-line del"><span class="gb-diff-num old">144</span><span class="gb-diff-num new"></span><span class="gb-diff-content">-   this.backoffMs *= 2;</span></div>
+                    <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">143</span><span class="gb-diff-content">+   const jitter = 0.8 + Math.random() * 0.4;</span></div>
+                    <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">144</span><span class="gb-diff-content">+   const delayMs = Math.min(30000, this.backoffMs * jitter);</span></div>
+                    <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">145</span><span class="gb-diff-content">+   await delay(delayMs);</span></div>
+                    <div class="gb-diff-line same"><span class="gb-diff-num old">145</span><span class="gb-diff-num new">146</span><span class="gb-diff-content">    return this.connect();</span></div>
+                    <div class="gb-diff-gap"><span class="gb-diff-gutter-span">@@ −147,5 +148,8 @@</span><span class="gb-diff-content">Show more unchanged lines</span></div>
+                  </div>
+                </div>
+
+                <div class="gb-tool-container">
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <svg width="14" height="14" style="color: var(--text-muted);"><use href="#icon-terminal"/></svg>
+                    </div>
+                    <span class="gb-terminal-cmd"><span class="gb-terminal-sigil">$</span> npm run typecheck</span>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+                  <div class="gb-terminal-block">
+                    <div class="gb-terminal-out">&gt; tsc --noEmit — 0 errors found.</div>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator failed"></span>
+                      <span class="gb-tool-verb mutating">WRITE</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="src/acp/config.ts">src/acp/config.ts</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+                  <div class="gb-tool-error-line">EACCES: permission denied, open 'src/acp/config.ts'</div>
+                </div>
+
+                <div class="gb-prose-container">
+                  <div class="gb-prose" data-markdown="The typecheck passed cleanly.">
+                    <p>The typecheck passed cleanly.</p>
+                  </div>
+                  <div class="gb-assistant-actions">
+                    <button class="gb-msg-copy-assistant" data-markdown="The typecheck passed cleanly." title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                  </div>
+                </div>
+
+                <div class="gb-turn-footer">
+                  <span>↑1.2k ↓450 · 3.5s · $0.0012</span>
+                </div>
+
+                <div class="gb-scroll-pill">
+                  <svg width="12" height="12"><use href="#icon-arrow-down"/></svg> Latest
+                </div>
+
+              </div>
+
+              <div class="gb-plan-dock" style="margin: 0 8px 8px 8px;">
+                <div class="gb-plan-dock-header">
+                  <div class="gb-plan-dock-title">
+                    <svg width="12" height="12" style="color: var(--text-faint);"><use href="#icon-chevron"/></svg>
+                    <span class="gb-plan-kicker">PLAN</span>
+                    <span class="gb-plan-count">3/3</span>
+                    <div class="gb-plan-meter"><div class="gb-plan-fill complete" style="width: 100%;"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="gb-composer" style="margin: 0 8px 8px 8px;">
+                <textarea class="gb-textarea" placeholder="Ask…"></textarea>
+                <div class="gb-composer-toolbar">
+                  <div class="gb-toolbar-left">
+                    <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-model"><span class="gb-model-name">Grok 4.5</span> <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-effort">Medium <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  </div>
+                  <button class="gb-btn-primary">Send</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SECTION C: MAIN CHAT 400px LIGHT ================= -->
+      <section id="section-c" class="mock-section">
+        <div class="mock-section-header">
+          <h2 class="mock-section-title">Section C — Main Chat (400px Wide, Light)</h2>
+          <p class="mock-section-desc">Side-by-side verification of light mode tokens (`data-theme="light"` override on frame container).</p>
+        </div>
+
+        <div class="mock-frame-container">
+          <!-- 400px Main Frame Light -->
+          <div class="mock-frame" data-width="400" data-theme="light">
+
+            <!-- 1. Header -->
+            <div class="gb-header">
+              <div class="gb-header-brand">
+                <span class="gb-wordmark">◆ GROK BUILD</span>
+                <span class="gb-unofficial-tag">unofficial</span>
+              </div>
+              <div class="gb-header-actions">
+                <button class="gb-icon-btn" title="Toggle Theme"><svg width="16" height="16"><use href="#icon-moon"/></svg></button>
+                <button class="gb-icon-btn" title="New Session"><svg width="16" height="16"><use href="#icon-plus"/></svg></button>
+                <button class="gb-icon-btn" title="Session History"><svg width="16" height="16"><use href="#icon-clock"/></svg></button>
+                <button class="gb-icon-btn" title="Rewind Checkpoints"><svg width="16" height="16"><use href="#icon-rewind"/></svg></button>
+                <button class="gb-icon-btn" title="Toggle Reasoning"><svg width="16" height="16"><use href="#icon-sparkles"/></svg></button>
+                <button class="gb-icon-btn" title="More Options"><svg width="16" height="16"><use href="#icon-ellipsis"/></svg></button>
+              </div>
+            </div>
+
+            <!-- 2. Status Line -->
+            <div class="gb-status-line">
+              <div class="gb-status-left">
+                <span class="gb-state-dot idle"></span>
+                <span class="gb-status-label">ready</span>
+                <span class="gb-status-sep gb-sep-title">·</span>
+                <span class="gb-status-title" title="refactor-acp-client">refactor-acp-client</span>
+                <span class="gb-status-sep gb-sep-folder">·</span>
+                <span class="gb-status-folder" title="grok-build-unofficial">grok-build-unofficial</span>
+              </div>
+              <div class="gb-status-right">
+                <div class="gb-ctx-badge" title="Context usage 11%">
+                  <span>ctx 11%</span>
+                  <div class="gb-ctx-meter"><div class="gb-ctx-fill" style="width: 11%;"></div></div>
+                </div>
+                <span class="gb-status-sep gb-sep-tokens">·</span>
+                <span class="gb-status-tokens">15k tok</span>
+                <span class="gb-status-sep gb-sep-cost">·</span>
+                <span class="gb-status-cost">$0.0042</span>
+                <span class="gb-status-sep gb-sep-ver">·</span>
+                <span class="gb-status-ver">0.2.114</span>
+              </div>
+            </div>
+
+            <!-- Main Transcript Area -->
+            <div class="gb-transcript">
+
+              <!-- 3. User Message -->
+              <div class="gb-user-msg" data-prompt="Can you inspect src/acp/client.ts and refactor the reconnection exponential backoff handling to prevent lockups during network switches?">
+                <div class="gb-user-text">Can you inspect <code>src/acp/client.ts</code> and refactor the reconnection exponential backoff handling to prevent lockups during network switches?</div>
+                <button class="gb-msg-copy-user" title="Copy prompt" aria-label="Copy prompt"><svg width="12" height="12"><use href="#icon-copy"/></svg></button>
+              </div>
+
+              <!-- 4. Collapsed Reasoning Row -->
+              <div class="gb-thought-block">
+                <div class="gb-thought-row gb-thought-toggle">
+                  <svg width="12" height="12" style="color: var(--text-faint);"><use href="#icon-sparkles"/></svg>
+                  <span class="gb-thought-label">Thought</span>
+                  <span class="gb-thought-meta">· 2.4s · 30 words</span>
+                  <svg width="12" height="12" style="margin-left: auto; color: var(--text-faint);"><use href="#icon-chevron"/></svg>
+                </div>
+                <div class="gb-thought-expanded" style="display: none;">
+                  Examining network reconnection handlers inside ACP client. Calculating exponential backoff jitter values to avoid thundering herd problem.
+                </div>
+              </div>
+
+              <!-- 5. Assistant Markdown Prose -->
+              <div class="gb-prose-container">
+                <div class="gb-prose" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`. Currently, when the socket drops unexpectedly, the retry loop invokes `reconnect()` synchronously without jitter compensation.&#10;&#10;To fix this, we need to update the backoff configuration:&#10;- Cap max delay at **30,000ms**&#10;- Inject uniform random jitter (±20%) on every retry attempt&#10;- Reset retry counter immediately upon successful handshakes">
+                  <p>I have analyzed the reconnection logic inside <a href="#">src/acp/client.ts</a>. Currently, when the socket drops unexpectedly, the retry loop invokes <code>reconnect()</code> synchronously without jitter compensation.</p>
+                  <p>To fix this, we need to update the backoff configuration:</p>
+                  <ul>
+                    <li>Cap max delay at <strong>30,000ms</strong></li>
+                    <li>Inject uniform random jitter (±20%) on every retry attempt</li>
+                    <li>Reset retry counter immediately upon successful handshakes</li>
+                  </ul>
+                </div>
+                <div class="gb-assistant-actions">
+                  <button class="gb-msg-copy-assistant" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`. Currently, when the socket drops unexpectedly, the retry loop invokes `reconnect()` synchronously without jitter compensation.&#10;&#10;To fix this, we need to update the backoff configuration:&#10;- Cap max delay at **30,000ms**&#10;- Inject uniform random jitter (±20%) on every retry attempt&#10;- Reset retry counter immediately upon successful handshakes" title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                </div>
+              </div>
+
+              <!-- 6. Four Consecutive Tool Rows (READ, READ, SEARCH, LIST) -->
+              <div style="display: flex; flex-direction: column;">
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator done"></span>
+                    <span class="gb-tool-verb">READ</span>
+                  </div>
+                  <a href="#" class="gb-tool-path" title="src/acp/client.ts">src/acp/client.ts</a>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+
+                <div class="gb-tool-stacked">
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb">READ</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="src/host/session.ts">src/host/session.ts</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb">SEARCH</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="reconnectInBackoff">reconnectInBackoff</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+
+                  <div class="gb-tool-row">
+                    <div class="gb-tool-verb-col">
+                      <span class="gb-tool-indicator done"></span>
+                      <span class="gb-tool-verb">LIST</span>
+                    </div>
+                    <a href="#" class="gb-tool-path" title="src/acp/">src/acp/</a>
+                    <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 7. EDIT Row with +12 -3 Counts and Expanded Inline Diff -->
+              <div class="gb-tool-container">
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator done"></span>
+                    <span class="gb-tool-verb mutating">EDIT</span>
+                  </div>
+                  <a href="#" class="gb-tool-path" title="webview/App.svelte">webview/App.svelte</a>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+                <div class="gb-tool-subrow">
+                  <span class="gb-diff-counts"><span class="gb-diff-add">+12</span> <span class="gb-diff-del">−3</span></span>
+                  <button class="gb-btn-ghost-action gb-diff-toggle">collapse diff</button>
+                </div>
+
+                <div class="gb-diff-view">
+                  <div class="gb-diff-line same"><span class="gb-diff-num old">142</span><span class="gb-diff-num new">142</span><span class="gb-diff-content">  async function handleReconnect() {</span></div>
+                  <div class="gb-diff-line del"><span class="gb-diff-num old">143</span><span class="gb-diff-num new"></span><span class="gb-diff-content">-   await delay(this.backoffMs);</span></div>
+                  <div class="gb-diff-line del"><span class="gb-diff-num old">144</span><span class="gb-diff-num new"></span><span class="gb-diff-content">-   this.backoffMs *= 2;</span></div>
+                  <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">143</span><span class="gb-diff-content">+   const jitter = 0.8 + Math.random() * 0.4;</span></div>
+                  <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">144</span><span class="gb-diff-content">+   const delayMs = Math.min(30000, this.backoffMs * jitter);</span></div>
+                  <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">145</span><span class="gb-diff-content">+   await delay(delayMs);</span></div>
+                  <div class="gb-diff-line same"><span class="gb-diff-num old">145</span><span class="gb-diff-num new">146</span><span class="gb-diff-content">    return this.connect();</span></div>
+                  <div class="gb-diff-gap"><span class="gb-diff-gutter-span">@@ −147,5 +148,8 @@</span><span class="gb-diff-content">Show more unchanged lines</span></div>
+                </div>
+              </div>
+
+              <!-- 8. Terminal Row -->
+              <div class="gb-tool-container">
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator done"></span>
+                    <svg width="14" height="14" style="color: var(--text-muted);"><use href="#icon-terminal"/></svg>
+                  </div>
+                  <span class="gb-terminal-cmd"><span class="gb-terminal-sigil">$</span> npm run typecheck</span>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+                <div class="gb-terminal-block">
+                  <div class="gb-terminal-out">&gt; tsc --noEmit — 0 errors found.</div>
+                </div>
+              </div>
+
+              <!-- 9. Failed WRITE Row -->
+              <div>
+                <div class="gb-tool-row">
+                  <div class="gb-tool-verb-col">
+                    <span class="gb-tool-indicator failed"></span>
+                    <span class="gb-tool-verb mutating">WRITE</span>
+                  </div>
+                  <a href="#" class="gb-tool-path" title="src/acp/config.ts">src/acp/config.ts</a>
+                  <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+                </div>
+                <div class="gb-tool-error-line">EACCES: permission denied, open 'src/acp/config.ts'</div>
+              </div>
+
+              <!-- 10. More Assistant Prose (Rhythm Resumes) -->
+              <div class="gb-prose-container">
+                <div class="gb-prose" data-markdown="The typecheck passed cleanly. The exponential backoff with jitter is now active for all incoming socket connection drops.">
+                  <p>The typecheck passed cleanly. The exponential backoff with jitter is now active for all incoming socket connection drops.</p>
+                </div>
+                <div class="gb-assistant-actions">
+                  <button class="gb-msg-copy-assistant" data-markdown="The typecheck passed cleanly. The exponential backoff with jitter is now active for all incoming socket connection drops." title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                </div>
+              </div>
+
+              <!-- 11. Turn Footer -->
+              <div class="gb-turn-footer">
+                <span>↑1.2k ↓450 · 3.5s · $0.0012</span>
+              </div>
+
+              <!-- 14. Scroll to Latest Pill -->
+              <div class="gb-scroll-pill">
+                <svg width="12" height="12"><use href="#icon-arrow-down"/></svg> Latest
+              </div>
+
+            </div>
+
+            <!-- 12. Plan Dock (Collapsed) -->
+            <div class="gb-plan-dock" style="margin: 0 12px 8px 12px;">
+              <div class="gb-plan-dock-header">
+                <div class="gb-plan-dock-title">
+                  <svg width="12" height="12" style="color: var(--text-faint);"><use href="#icon-chevron"/></svg>
+                  <span class="gb-plan-kicker">PLAN</span>
+                  <span class="gb-plan-count">3/3</span>
+                  <div class="gb-plan-meter"><div class="gb-plan-fill complete" style="width: 100%;"></div></div>
+                </div>
+                <span class="gb-plan-step-summary">Refactor reconnection exponential backoff</span>
+              </div>
+            </div>
+
+            <!-- 13. Composer -->
+            <div class="gb-composer" style="margin: 0 12px 12px 12px;">
+              <textarea class="gb-textarea" placeholder="Ask, paste a screenshot, or / for commands…"></textarea>
+              <div class="gb-composer-toolbar">
+                <div class="gb-toolbar-left">
+                  <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-model"><span class="gb-model-name">Grok 4.5</span> <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-effort">Medium <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                </div>
+                <button class="gb-btn-primary">Send</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SECTION D: WIDE PANEL 900px DARK ================= -->
+      <section id="section-d" class="mock-section">
+        <div class="mock-section-header">
+          <h2 class="mock-section-title">Section D — Wide Panel (~900px Wide, Dark)</h2>
+          <p class="mock-section-desc">Demonstrates that prose measure is capped at 72ch and centered within editor-panel width.</p>
+        </div>
+
+        <div class="mock-frame-container">
+          <div class="mock-frame" data-width="900" data-theme="dark">
+            <div class="gb-header">
+              <div class="gb-header-brand">
+                <span class="gb-wordmark">◆ GROK BUILD</span>
+                <span class="gb-unofficial-tag">unofficial</span>
+              </div>
+              <div class="gb-header-actions">
+                <button class="gb-icon-btn"><svg width="16" height="16"><use href="#icon-plus"/></svg></button>
+                <button class="gb-icon-btn"><svg width="16" height="16"><use href="#icon-clock"/></svg></button>
+              </div>
+            </div>
+
+            <div class="gb-transcript">
+              <div class="gb-user-msg" data-prompt="Can you inspect src/acp/client.ts and refactor the reconnection exponential backoff handling to prevent lockups during network switches?">
+                <div class="gb-user-text">Can you inspect <code>src/acp/client.ts</code> and refactor the reconnection exponential backoff handling to prevent lockups during network switches?</div>
+                <button class="gb-msg-copy-user" title="Copy prompt" aria-label="Copy prompt"><svg width="12" height="12"><use href="#icon-copy"/></svg></button>
+              </div>
+
+              <div class="gb-prose-container">
+                <div class="gb-prose" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`. When opened as a full editor panel (~900px), prose stays measure-capped at 72ch so line lengths remain optimal for reading without stretching endlessly across wide monitors.">
+                  <p>I have analyzed the reconnection logic inside <a href="#">src/acp/client.ts</a>. When opened as a full editor panel (~900px), prose stays measure-capped at 72ch so line lengths remain optimal for reading without stretching endlessly across wide monitors.</p>
+                </div>
+                <div class="gb-assistant-actions">
+                  <button class="gb-msg-copy-assistant" data-markdown="I have analyzed the reconnection logic inside `src/acp/client.ts`. When opened as a full editor panel (~900px), prose stays measure-capped at 72ch so line lengths remain optimal for reading without stretching endlessly across wide monitors." title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                </div>
+              </div>
+
+              <div class="gb-tool-row">
+                <div class="gb-tool-verb-col">
+                  <span class="gb-tool-verb">READ</span>
+                </div>
+                <a href="#" class="gb-tool-path">src/acp/client.ts</a>
+                <div class="gb-tool-actions"><button class="gb-btn-ghost-action">open</button></div>
+              </div>
+
+              <div class="gb-scroll-pill">
+                <svg width="12" height="12"><use href="#icon-arrow-down"/></svg> Latest
+              </div>
+            </div>
+
+            <div class="gb-composer" style="margin: 0 16px 16px 16px;">
+              <textarea class="gb-textarea" placeholder="Ask, paste a screenshot, or / for commands…"></textarea>
+              <div class="gb-composer-toolbar">
+                <div class="gb-toolbar-left">
+                  <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-model"><span class="gb-model-name">Grok 4.5</span> <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  <button class="gb-toolbar-btn gb-btn-effort">Medium <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                </div>
+                <button class="gb-btn-primary">Send</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SECTION E: INTERRUPT & INTERACTIVE STATES ================= -->
+      <section id="section-e" class="mock-section">
+        <div class="mock-section-header">
+          <h2 class="mock-section-title">Section E — Interrupt & Interactive States</h2>
+          <p class="mock-section-desc">Exhaustive specimens of interactive cards, approval gates, wizard steps, notices, queues, autocomplete popups, and streaming states.</p>
+        </div>
+
+        <div class="mock-frame-container">
+
+          <!-- 1. Approval Pending File Write -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">1. approval pending — File Write</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px;">
+                <div class="gb-approval-card">
+                  <div class="gb-approval-title">
+                    <svg width="16" height="16" style="color: var(--warning);"><use href="#icon-warning"/></svg>
+                    File Write Approval Requested
+                  </div>
+                  <a href="#" class="gb-tool-path gb-approval-target">src/host/session.ts</a>
+                  <div class="gb-diff-view">
+                    <div class="gb-diff-line same"><span class="gb-diff-num old">42</span><span class="gb-diff-num new">42</span><span class="gb-diff-content">  export class SessionHost {</span></div>
+                    <div class="gb-diff-line del"><span class="gb-diff-num old">43</span><span class="gb-diff-num new"></span><span class="gb-diff-content">-   private timeout = 5000;</span></div>
+                    <div class="gb-diff-line add"><span class="gb-diff-num old"></span><span class="gb-diff-num new">43</span><span class="gb-diff-content">+   private timeout = 10000;</span></div>
+                    <div class="gb-diff-line same"><span class="gb-diff-num old">44</span><span class="gb-diff-num new">44</span><span class="gb-diff-content">    constructor() {}</span></div>
+                  </div>
+                  <div class="gb-action-group">
+                    <button class="gb-btn-primary">Apply</button>
+                    <button class="gb-btn-secondary">Accept all edits</button>
+                    <button class="gb-btn-ghost">Reject</button>
+                    <button class="gb-btn-ghost-danger">Never</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Approval Pending Terminal Command -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">2. approval pending — Terminal Command</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px;">
+                <div class="gb-approval-card">
+                  <div class="gb-approval-title">
+                    <svg width="16" height="16" style="color: var(--warning);"><use href="#icon-warning"/></svg>
+                    Terminal Command Approval Requested
+                  </div>
+                  <div class="gb-approval-target">$ npm run test:unit</div>
+                  <div style="font-size: 11px; color: var(--text-faint);">cwd: e:\projects\grok-build-unofficial</div>
+                  <div class="gb-action-group">
+                    <button class="gb-btn-primary">Run</button>
+                    <button class="gb-btn-secondary">Always allow</button>
+                    <button class="gb-btn-ghost">Reject</button>
+                    <button class="gb-btn-ghost-danger">Never</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Approval Answered -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">3. approval answered</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px;">
+                <div class="gb-approval-card answered">
+                  <div class="gb-approval-title">
+                    File Write — Approved
+                  </div>
+                  <div class="gb-approval-target">src/host/session.ts</div>
+                  <div class="gb-verdict-line">
+                    <svg width="14" height="14" style="color: var(--success);"><use href="#icon-check"/></svg> Allowed once by Salim
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. proposedPlan Active & Answered -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">4. proposedPlan Active & Answered</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px; gap: 12px;">
+                <!-- Active -->
+                <div class="gb-proposed-plan">
+                  <div class="gb-card-header">
+                    <svg width="14" height="14" style="color: var(--text-muted);"><use href="#icon-layers"/></svg>
+                    <span class="gb-card-kicker">PLAN PROPOSAL</span>
+                  </div>
+                  <div class="gb-prose" style="font-size: 12.5px;">
+                    <p>I propose migrating token management to a single CSS file and building a static HTML mock.</p>
+                  </div>
+                  <div class="gb-action-group">
+                    <button class="gb-btn-primary">Approve & start</button>
+                    <button class="gb-btn-secondary">Request changes</button>
+                    <button class="gb-btn-ghost-danger">Reject</button>
+                  </div>
+                </div>
+                <!-- Answered -->
+                <div class="gb-proposed-plan answered">
+                  <div class="gb-card-header">
+                    <span class="gb-card-kicker">PLAN PROPOSAL</span>
+                  </div>
+                  <div class="gb-verdict-line">
+                    <svg width="14" height="14" style="color: var(--success);"><use href="#icon-check"/></svg> Approved & started
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Question Wizard (Single-Select Radio & Multi-Select Checkbox) -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">5. question wizard</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px; gap: 12px;">
+                
+                <!-- Radio Single-Select Variant -->
+                <div class="gb-question-card">
+                  <div class="gb-wizard-header">
+                    <span>Question 1 of 2 (Single-Select)</span>
+                    <div class="gb-wizard-meter"><div class="gb-wizard-fill" style="width: 50%;"></div></div>
+                  </div>
+                  <div class="gb-question-title">Which test runner should we use for verification?</div>
+                  <div class="gb-option-list">
+                    <div class="gb-option-row selected">
+                      <div class="gb-radio selected"></div>
+                      <span class="gb-option-label">Vitest (Recommended)</span>
+                    </div>
+                    <div class="gb-option-row">
+                      <div class="gb-radio"></div>
+                      <span class="gb-option-label">Node built-in test runner</span>
+                    </div>
+                    <div class="gb-option-row gb-option-other">
+                      <div class="gb-radio"></div>
+                      <span class="gb-option-label">Other…</span>
+                    </div>
+                  </div>
+                  <input type="text" class="gb-question-input" placeholder="Custom runner..." style="display: none;">
+                  <div class="gb-action-group" style="justify-content: space-between;">
+                    <button class="gb-btn-ghost">Skip</button>
+                    <button class="gb-btn-primary">Next</button>
+                  </div>
+                </div>
+
+                <!-- Checkbox Multi-Select Variant -->
+                <div class="gb-question-card">
+                  <div class="gb-wizard-header">
+                    <span>Question 2 of 2 (Multi-Select)</span>
+                    <div class="gb-wizard-meter"><div class="gb-wizard-fill" style="width: 100%;"></div></div>
+                  </div>
+                  <div class="gb-question-title">Which verification checks should run before PR submission?</div>
+                  <div class="gb-option-list">
+                    <div class="gb-option-row selected">
+                      <div class="gb-checkbox selected">✓</div>
+                      <span class="gb-option-label">Run typecheck and lints</span>
+                    </div>
+                    <div class="gb-option-row">
+                      <div class="gb-checkbox"></div>
+                      <span class="gb-option-label">Generate coverage report</span>
+                    </div>
+                    <div class="gb-option-row gb-option-other selected">
+                      <div class="gb-checkbox selected">✓</div>
+                      <span class="gb-option-label">Other…</span>
+                    </div>
+                  </div>
+                  <input type="text" class="gb-question-input" placeholder="Custom check..." value="Run bundle size check" style="display: block;">
+                  <div class="gb-action-group" style="justify-content: space-between;">
+                    <button class="gb-btn-ghost">Skip</button>
+                    <div style="display: flex; gap: 6px;">
+                      <button class="gb-btn-secondary">Back</button>
+                      <button class="gb-btn-primary">Submit</button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. Notice Info, Warn, and Error -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">6. notice Info, Warn, & Error</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px; gap: 8px;">
+                <div class="gb-notice-info">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14"><use href="#icon-info"/></svg>
+                    <span>Context window compacted by 35%</span>
+                  </div>
+                  <a href="#" class="gb-btn-ghost-action">log</a>
+                </div>
+
+                <div class="gb-notice-warn">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" style="color: var(--warning);"><use href="#icon-warning"/></svg>
+                    <span>Git worktree uncommitted changes detected</span>
+                  </div>
+                  <a href="#" class="gb-btn-ghost-action">log</a>
+                </div>
+
+                <div class="gb-notice-error">
+                  <div style="display: flex; align-items: center; gap: 6px; font-weight: 500;">
+                    <svg width="16" height="16" style="color: var(--danger);"><use href="#icon-info"/></svg>
+                    <span>Agent execution error encountered</span>
+                  </div>
+                  <div class="gb-notice-error-detail">Error: Process exited with status code 127
+Command 'grok' not found in PATH</div>
+                  <button class="gb-btn-secondary" style="align-self: flex-start;">View log</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. Setup Card -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">7. setup card</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px;">
+                <div class="gb-setup-card">
+                  <div style="font-weight: 600; font-size: 13.5px;">Grok CLI is missing or unauthenticated</div>
+                  <div style="font-size: 12.5px; color: var(--text-muted);">Please install the Grok CLI tool to enable AI assistance in this workspace.</div>
+                  <a href="#" class="gb-tool-path">https://grok.x.ai/install</a>
+                  <button class="gb-btn-primary" style="align-self: flex-start;">Restart Agent</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 8. Expanded Plan Dock -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">8. Plan Dock Expanded</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px;">
+                <div class="gb-plan-dock">
+                  <div class="gb-plan-dock-header">
+                    <div class="gb-plan-dock-title">
+                      <svg width="12" height="12" style="transform: rotate(90deg); color: var(--text-faint);"><use href="#icon-chevron"/></svg>
+                      <span class="gb-plan-kicker">PLAN</span>
+                      <span class="gb-plan-count">1/3</span>
+                      <div class="gb-plan-meter"><div class="gb-plan-fill" style="width: 33%;"></div></div>
+                    </div>
+                  </div>
+                  <div class="gb-plan-items">
+                    <div class="gb-plan-item done">
+                      <svg width="14" height="14" class="gb-plan-icon-done"><use href="#icon-check"/></svg>
+                      <span>Create design mock tokens stylesheet</span>
+                    </div>
+                    <div class="gb-plan-item">
+                      <div class="gb-plan-icon-active"></div>
+                      <span style="font-weight: 500;">Build interactive component specimens</span>
+                    </div>
+                    <div class="gb-plan-item">
+                      <div class="gb-plan-icon-pending"></div>
+                      <span style="color: var(--text-muted);">Verify verification commands output</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 9. Queue Banner -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">9. queue banner</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px;">
+                <div class="gb-composer">
+                  <div class="gb-queue-banner">
+                    <span><strong>2</strong> queued messages</span>
+                    <div style="display: flex; gap: 8px;">
+                      <a href="#" class="gb-btn-ghost-action">Send all now</a>
+                      <a href="#" class="gb-btn-ghost-action">Clear</a>
+                    </div>
+                  </div>
+                  <div class="gb-queue-item">
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;">Also run test suite afterwards</span>
+                    <button class="gb-btn-ghost-action">Send</button>
+                  </div>
+                  <div class="gb-queue-item">
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;">Update docs/API.md with new signatures</span>
+                    <button class="gb-btn-ghost-action">Send</button>
+                  </div>
+                  <textarea class="gb-textarea" placeholder="Add another queued message…"></textarea>
+                  <div class="gb-composer-toolbar">
+                    <div class="gb-toolbar-left">
+                      <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                      <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    </div>
+                    <button class="gb-btn-primary">Queue</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 10. Slash-Command Autocomplete Popup Open -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">10. slash-command autocomplete popup open</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px; padding-top: 140px;">
+                <div class="gb-composer">
+                  <div class="gb-autocomplete">
+                    <div class="gb-autocomplete-row active">
+                      <span class="gb-autocomplete-name">/context</span>
+                      <span class="gb-autocomplete-desc">Inspect active context window</span>
+                    </div>
+                    <div class="gb-autocomplete-row">
+                      <span class="gb-autocomplete-name">/compact</span>
+                      <span class="gb-autocomplete-desc">Compact context memory</span>
+                    </div>
+                    <div class="gb-autocomplete-row">
+                      <span class="gb-autocomplete-name">/commit</span>
+                      <span class="gb-autocomplete-desc">Commit current changes</span>
+                    </div>
+                  </div>
+                  <textarea class="gb-textarea">/co</textarea>
+                  <div class="gb-composer-toolbar">
+                    <div class="gb-toolbar-left">
+                      <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                      <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    </div>
+                    <button class="gb-btn-primary">Send</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 11. Streaming Assistant Text -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">11. streaming assistant text</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px; gap: 12px;">
+                <div class="gb-thought-block">
+                  <div class="gb-thought-row">
+                    <span class="gb-state-dot thinking"></span>
+                    <span class="gb-thought-label">Thinking…</span>
+                    <span class="gb-thought-meta">· 1.4s</span>
+                  </div>
+                </div>
+                <div class="gb-prose-container">
+                  <div class="gb-prose">
+                    <p>I am updating the reconnection logic in <code>src/acp/client.ts</code> to handle exponential backoff with random jitter…<span class="gb-caret"></span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 12. Collapsed User Message with Show More, and Sticky Pinned Prompt Bar -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">12. collapsed user message with show more, and the sticky pinned prompt bar</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-pinned-prompt">
+                <svg width="16" height="16" style="color: var(--accent); flex-shrink: 0;"><use href="#icon-file"/></svg>
+                <span class="gb-pinned-text">Refactor reconnection backoff handling in client.ts</span>
+              </div>
+              <div class="gb-transcript" style="min-height: auto; padding: 12px; gap: 12px;">
+                <div class="gb-user-msg collapsed" data-prompt="Can you inspect src/acp/client.ts and refactor the reconnection exponential backoff handling to prevent lockups during network switches? Also verify all edge cases in unit test suite.">
+                  <div class="gb-user-text">Can you inspect <code>src/acp/client.ts</code> and refactor the reconnection exponential backoff handling to prevent lockups during network switches? Also verify all edge cases in unit test suite.</div>
+                  <button class="gb-msg-copy-user" title="Copy prompt" aria-label="Copy prompt"><svg width="12" height="12"><use href="#icon-copy"/></svg></button>
+                  <button class="gb-btn-ghost-sm">show more</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 13. Message Copy Affordance — User and Assistant, Revealed -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="font-size: 11px; color: var(--text-muted);">13. message copy affordance — user and assistant, revealed</div>
+            <div class="mock-frame" data-width="400" data-theme="dark">
+              <div class="gb-transcript" style="min-height: auto; padding: 12px; gap: 12px;">
+                <div class="gb-user-msg" data-prompt="Can you copy this user prompt text?">
+                  <div class="gb-user-text">Can you copy this user prompt text?</div>
+                  <button class="gb-msg-copy-user revealed" title="Copy prompt" aria-label="Copy prompt"><svg width="12" height="12"><use href="#icon-copy"/></svg></button>
+                </div>
+                <div class="gb-prose-container">
+                  <div class="gb-prose" data-markdown="Assistant response message with copy affordance in revealed state.">
+                    <p>Assistant response message with copy affordance in revealed state.</p>
+                  </div>
+                  <div class="gb-assistant-actions">
+                    <button class="gb-msg-copy-assistant revealed" data-markdown="Assistant response message with copy affordance in revealed state." title="Copy markdown" aria-label="Copy markdown"><svg width="12" height="12"><use href="#icon-copy"/></svg><span aria-live="polite">Copy</span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ================= SECTION F: MODALS & POPOVERS ================= -->
+      <section id="section-f" class="mock-section">
+        <div class="mock-section-header">
+          <h2 class="mock-section-title">Section F — Modals & Popovers</h2>
+          <p class="mock-section-desc">All five modal overlays rendered inline on dimmed backdrop swatches for static design inspection.</p>
+        </div>
+
+        <div class="modal-swatch-grid">
+
+          <!-- 1. Session History Popover -->
+          <div class="modal-backdrop-swatch">
+            <div class="gb-modal-panel">
+              <div class="gb-modal-header">
+                <span class="gb-modal-title">Session History</span>
+                <button class="gb-icon-btn"><svg width="14" height="14"><use href="#icon-close"/></svg></button>
+              </div>
+              <div class="gb-modal-body">
+                <input type="text" class="gb-question-input" placeholder="Search sessions…" value="refactor">
+                
+                <div class="gb-history-row">
+                  <span style="font-weight: 500;">refactor-acp-client</span>
+                  <span style="color: var(--accent); font-size: 11px;">current</span>
+                </div>
+
+                <!-- Inline Rename Row -->
+                <div class="gb-history-row">
+                  <input type="text" class="gb-question-input" value="fix-login-flow" style="margin: 0; padding: 2px 6px;">
+                  <div style="display: flex; gap: 4px;">
+                    <button class="gb-btn-ghost-action"><svg width="12" height="12"><use href="#icon-check"/></svg></button>
+                    <button class="gb-btn-ghost-action"><svg width="12" height="12"><use href="#icon-close"/></svg></button>
+                  </div>
+                </div>
+
+                <!-- Armed Delete Row -->
+                <div class="gb-history-row danger-armed">
+                  <span style="color: var(--danger);">Delete session "temp-test-run"?</span>
+                  <div style="display: flex; gap: 4px;">
+                    <button class="gb-btn-ghost-action" style="color: var(--danger);"><svg width="12" height="12"><use href="#icon-check"/></svg></button>
+                    <button class="gb-btn-ghost-action"><svg width="12" height="12"><use href="#icon-close"/></svg></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Rewind & Worktree Popover -->
+          <div class="modal-backdrop-swatch">
+            <div class="gb-modal-panel">
+              <div class="gb-modal-header">
+                <span class="gb-modal-title">Rewind & Worktree</span>
+                <button class="gb-icon-btn"><svg width="14" height="14"><use href="#icon-close"/></svg></button>
+              </div>
+              <div class="gb-modal-body">
+                <span class="gb-card-kicker">CHECKPOINTS</span>
+                <div class="gb-history-row">
+                  <span>Prompt #3: Add exponential backoff</span>
+                  <span style="color: var(--text-faint); font-size: 11px;">2m ago</span>
+                </div>
+                <div class="gb-history-row">
+                  <span>Prompt #2: Inspect acp client.ts</span>
+                  <span style="color: var(--text-faint); font-size: 11px;">10m ago</span>
+                </div>
+
+                <span class="gb-card-kicker" style="margin-top: 8px;">WORKTREE</span>
+                <input type="text" class="gb-question-input" placeholder="worktree name (optional)" value="feature/acp-backoff">
+                <div class="gb-action-group" style="margin-top: 4px;">
+                  <button class="gb-btn-primary">Create</button>
+                  <button class="gb-btn-secondary">Move</button>
+                  <button class="gb-btn-secondary">Open</button>
+                  <button class="gb-btn-secondary">Apply</button>
+                  <button class="gb-btn-ghost-danger">Remove</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. About Popover -->
+          <div class="modal-backdrop-swatch">
+            <div class="gb-modal-panel">
+              <div class="gb-modal-header">
+                <span class="gb-modal-title">About Grok Build</span>
+                <button class="gb-icon-btn"><svg width="14" height="14"><use href="#icon-close"/></svg></button>
+              </div>
+              <div class="gb-modal-body">
+                <div>
+                  <span class="gb-wordmark">◆ GROK BUILD</span>
+                  <span class="gb-unofficial-tag">unofficial</span>
+                </div>
+                <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
+                  Community UI for the Grok Build CLI — not affiliated with xAI. Built for seamless agentic pairing inside VS Code.
+                </p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11.5px; border-top: 1px solid var(--border); padding-top: 8px;">
+                  <div><span style="color: var(--text-faint);">Agent version:</span> 0.2.114</div>
+                  <div><span style="color: var(--text-faint);">CLI domain:</span> grok.x.ai</div>
+                </div>
+              </div>
+              <div class="gb-modal-footer">
+                <button class="gb-btn-secondary">GitHub</button>
+                <button class="gb-btn-primary">grok.x.ai</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Slash-Command Result Modal -->
+          <div class="modal-backdrop-swatch">
+            <div class="gb-modal-panel" style="max-width: 420px;">
+              <div class="gb-modal-header">
+                <span class="gb-modal-title" style="font-family: var(--font-mono); color: var(--accent);">/context</span>
+                <button class="gb-icon-btn"><svg width="14" height="14"><use href="#icon-close"/></svg></button>
+              </div>
+              <div class="gb-modal-body">
+                <div class="gb-prose" style="font-size: 12.5px;">
+                  <p><strong>Context Window Analysis</strong></p>
+                  <ul>
+                    <li>Total capacity: 200,000 tokens</li>
+                    <li>Currently loaded: 22,410 tokens (11%)</li>
+                    <li>System prompt: 4,100 tokens</li>
+                    <li>Transcript messages: 18,310 tokens</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="gb-modal-footer">
+                <button class="gb-btn-primary">Done</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Header Overflow Menu Open -->
+          <div class="modal-backdrop-swatch">
+            <div class="gb-modal-panel" style="max-width: 260px;">
+              <div class="gb-modal-body" style="padding: 4px;">
+                <div class="gb-history-row" style="padding: 6px 8px; cursor: pointer;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="14" height="14"><use href="#icon-settings"/></svg>
+                    <span>Open user config</span>
+                  </div>
+                </div>
+                <div class="gb-history-row" style="padding: 6px 8px; opacity: 0.5;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="14" height="14"><use href="#icon-server"/></svg>
+                    <span>MCP servers</span>
+                  </div>
+                  <span class="kbd-shortcut">config only</span>
+                </div>
+                <div class="gb-history-row" style="padding: 6px 8px; opacity: 0.5;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="14" height="14"><use href="#icon-layers"/></svg>
+                    <span>Select skills…</span>
+                  </div>
+                  <span class="kbd-shortcut">leader-only</span>
+                </div>
+                <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
+                <div class="gb-history-row" style="padding: 6px 8px; cursor: pointer;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="14" height="14"><use href="#icon-list"/></svg>
+                    <span>Output log</span>
+                  </div>
+                </div>
+                <div class="gb-history-row" style="padding: 6px 8px; cursor: pointer; color: var(--danger);">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="14" height="14"><use href="#icon-restart"/></svg>
+                    <span>Restart agent</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ================= SECTION G: EMPTY / FIRST-RUN STATE ================= -->
+      <section id="section-g" class="mock-section">
+        <div class="mock-section-header">
+          <h2 class="mock-section-title">Section G — Empty / First-Run State</h2>
+          <p class="mock-section-desc">DESIGN_SYSTEM §5 empty state in both dark and light modes side by side.</p>
+        </div>
+
+        <div class="mock-frame-container">
+
+          <!-- Dark Empty State -->
+          <div class="mock-frame" data-width="400" data-theme="dark">
+            <div class="gb-transcript" style="justify-content: center; align-items: center; text-align: center; min-height: 400px; padding: 24px;">
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 24px;">
+                <span class="gb-wordmark" style="font-size: 14px;">◆ GROK BUILD</span>
+                <span class="gb-unofficial-tag">unofficial</span>
+              </div>
+
+              <div style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 32px;">
+                Ask anything about this workspace.
+              </div>
+
+              <div class="gb-composer" style="width: 100%;">
+                <textarea class="gb-textarea" placeholder="Ask, paste a screenshot, or / for commands…"></textarea>
+                <div class="gb-composer-toolbar">
+                  <div class="gb-toolbar-left">
+                    <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-model"><span class="gb-model-name">Grok 4.5</span> <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-effort">Medium <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  </div>
+                  <button class="gb-btn-primary">Send</button>
+                </div>
+              </div>
+
+              <div style="margin-top: 16px; font-size: 11.5px; color: var(--text-faint);">
+                <span class="kbd-shortcut">Enter</span> sends · <span class="kbd-shortcut">Shift</span>+<span class="kbd-shortcut">Enter</span> new line · <span class="kbd-shortcut">Esc</span> stops
+              </div>
+            </div>
+          </div>
+
+          <!-- Light Empty State -->
+          <div class="mock-frame" data-width="400" data-theme="light">
+            <div class="gb-transcript" style="justify-content: center; align-items: center; text-align: center; min-height: 400px; padding: 24px;">
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 24px;">
+                <span class="gb-wordmark" style="font-size: 14px;">◆ GROK BUILD</span>
+                <span class="gb-unofficial-tag">unofficial</span>
+              </div>
+
+              <div style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 32px;">
+                Ask anything about this workspace.
+              </div>
+
+              <div class="gb-composer" style="width: 100%;">
+                <textarea class="gb-textarea" placeholder="Ask, paste a screenshot, or / for commands…"></textarea>
+                <div class="gb-composer-toolbar">
+                  <div class="gb-toolbar-left">
+                    <button class="gb-toolbar-btn gb-btn-attach" title="Attach file" aria-label="Attach file"><svg width="14" height="14"><use href="#icon-paperclip"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-mode"><span class="gb-dot-perm bypass"></span> Bypass <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-model"><span class="gb-model-name">Grok 4.5</span> <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                    <button class="gb-toolbar-btn gb-btn-effort">Medium <svg width="12" height="12" class="gb-chevron"><use href="#icon-chevron-down"/></svg></button>
+                  </div>
+                  <button class="gb-btn-primary">Send</button>
+                </div>
+              </div>
+
+              <div style="margin-top: 16px; font-size: 11.5px; color: var(--text-faint);">
+                <span class="kbd-shortcut">Enter</span> sends · <span class="kbd-shortcut">Shift</span>+<span class="kbd-shortcut">Enter</span> new line · <span class="kbd-shortcut">Esc</span> stops
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+</body>
+</html>

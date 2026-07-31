@@ -63,24 +63,23 @@
     window.setTimeout(() => {
       btn.classList.remove('copied');
       btn.setAttribute('aria-label', 'Copy code');
-    }, 1600);
+    }, 1200);
   }
 </script>
 
 <div class="md" bind:this={root}>{@html html}</div>
 
 <style>
-  /*
-   * Assistant prose needs more air than card chrome — sidebar chats read dense at 1.5/0.6em.
-   * Aim for Claude-like open paragraphs without blowing the narrow column.
-   */
+  /* §2 / §7.5 — body 13.5/1.70, measure owned by the transcript parent. */
   .md {
-    line-height: 1.72;
+    font-size: 13.5px;
+    line-height: 1.7;
     overflow-wrap: anywhere;
+    color: var(--text);
   }
 
   .md :global(p) {
-    margin: 0 0 1.2em;
+    margin: 0 0 var(--space-3);
   }
 
   .md :global(p:last-child) {
@@ -94,10 +93,10 @@
   .md :global(h5),
   .md :global(h6) {
     margin: 1.55em 0 0.65em;
-    font-size: 1em;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: -0.01em;
-    line-height: 1.4;
+    line-height: 1.35;
+    color: var(--text);
   }
 
   .md :global(h1:first-child),
@@ -110,22 +109,37 @@
   }
 
   .md :global(h1) {
-    font-size: 1.2em;
+    font-size: 17px;
   }
 
   .md :global(h2) {
-    font-size: 1.12em;
+    font-size: 15.5px;
+  }
+
+  .md :global(h3) {
+    font-size: 14px;
+  }
+
+  .md :global(h4),
+  .md :global(h5),
+  .md :global(h6) {
+    font-size: 13.5px;
   }
 
   .md :global(ul),
   .md :global(ol) {
-    margin: 0 0 1.2em;
-    padding-left: 1.5em;
+    margin: 0 0 var(--space-3);
+    padding-left: var(--space-4);
+    line-height: 1.65;
   }
 
   .md :global(li) {
-    margin: 0.5em 0;
+    margin: 0.35em 0;
     line-height: 1.65;
+  }
+
+  .md :global(li::marker) {
+    color: var(--text-faint);
   }
 
   .md :global(li > p) {
@@ -138,72 +152,72 @@
   }
 
   .md :global(code) {
-    font-family: var(--gb-mono);
-    font-size: 0.92em;
-    background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius-sm);
-    padding: 0.15em 0.4em;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: var(--bg-inset);
+    border-radius: var(--radius-sm);
+    padding: 0 4px;
+    color: var(--text);
   }
 
-  /* Fenced block: head (lang + copy) over a sunken pre — same chrome as Copilot/Claude. */
+  /* Fenced blocks: inset surface, no border; lang + copy absolutely positioned. */
   .md :global(.md-code-wrap) {
-    margin: 1.2em 0;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    background: var(--gb-surface-sunken);
+    margin: var(--space-3) 0;
+    border-radius: var(--radius-md);
+    background: var(--bg-inset);
     overflow: hidden;
+    position: relative;
   }
 
   .md :global(.md-code-head) {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 32px;
-    padding: 0 8px 0 12px;
-    border-bottom: 1px solid var(--gb-rule);
-    background: color-mix(in srgb, var(--vscode-editor-background) 55%, var(--gb-surface-sunken));
+    pointer-events: none;
   }
 
   .md :global(.md-code-lang) {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: var(--gb-mono);
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--gb-dim);
+    color: var(--text-faint);
+    pointer-events: none;
   }
 
   .md :global(.md-copy) {
+    pointer-events: auto;
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 4px;
     margin: 0;
-    padding: 4px 8px;
-    border: 1px solid transparent;
-    border-radius: var(--gb-radius-sm);
-    background: none;
-    color: var(--gb-dim);
+    padding: 2px 6px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--bg-hover);
+    color: var(--text-muted);
     font: inherit;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 500;
     cursor: pointer;
     line-height: 1;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-standard);
   }
 
-  .md :global(.md-copy:hover) {
-    color: var(--vscode-foreground);
-    border-color: var(--gb-rule);
-    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15));
+  .md :global(.md-code-wrap:hover .md-copy),
+  .md :global(.md-copy:focus-visible) {
+    opacity: 1;
   }
 
   .md :global(.md-copy.copied) {
-    color: var(--gb-ok, var(--vscode-charts-green, #4caf50));
+    color: var(--success);
+    opacity: 1;
   }
 
   .md :global(.md-copy-idle),
@@ -213,7 +227,6 @@
     gap: 4px;
   }
 
-  /* Default: only Copy. After click: only Copied. */
   .md :global(.md-copy:not(.copied) .md-copy-idle),
   .md :global(.md-copy.copied .md-copy-done) {
     display: inline-flex;
@@ -226,82 +239,75 @@
 
   .md :global(pre.md-code) {
     margin: 0;
-    padding: 14px 16px;
+    padding: var(--space-3);
+    padding-top: 28px;
     background: transparent;
     border: none;
     border-radius: 0;
+    overflow-x: auto;
   }
 
   .md :global(pre.md-code code) {
     background: none;
     padding: 0;
-    font-size: 0.9em;
-    line-height: 1.65;
-    /* Same reasoning as the diff rows: sideways scrolling inside a narrow sidebar hides code
-       instead of presenting it. pre-wrap keeps indentation, anywhere breaks unbreakable tokens. */
+    font-size: 12.5px;
+    line-height: 1.55;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 
   .md :global(blockquote) {
-    margin: 1.2em 0;
-    padding: 0.45em 0 0.45em 14px;
-    border-left: 3px solid var(--vscode-textBlockQuote-border, var(--gb-rule));
-    color: var(--gb-dim);
+    margin: var(--space-3) 0;
+    padding: 0 0 0 var(--space-3);
+    border-left: 2px solid var(--border-strong);
+    color: var(--text-muted);
     line-height: 1.65;
   }
 
   .md :global(a) {
-    color: var(--gb-accent);
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .md :global(a:hover) {
+    text-decoration: underline;
   }
 
   .md :global(hr) {
     border: none;
-    border-top: 1px solid var(--gb-rule);
-    margin: 1.45em 0;
+    border-top: 1px solid var(--border);
+    margin: var(--space-4) 0;
   }
 
   .md :global(strong) {
-    font-weight: 700;
+    font-weight: 600;
   }
 
   /*
-   * Tables scroll sideways in a narrow sidebar. Roomier cells so summary tables breathe.
+   * Tables: hairline rows, 12.5px, inset header, horizontal scroll retained.
    */
   .md :global(table) {
     display: block;
     width: max-content;
     max-width: 100%;
     overflow-x: auto;
-    margin: 1.2em 0 1.35em;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
+    margin: var(--space-3) 0;
     border-collapse: collapse;
-    font-size: 0.95em;
+    font-size: 12.5px;
     line-height: 1.5;
   }
 
   .md :global(th),
   .md :global(td) {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--gb-rule);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
     text-align: left;
     vertical-align: top;
-    overflow-wrap: normal;
-  }
-
-  .md :global(th + th),
-  .md :global(td + td) {
-    border-left: 1px solid var(--gb-rule);
   }
 
   .md :global(thead th) {
-    background: var(--gb-surface-sunken);
-    border-bottom: 2px solid var(--gb-rule-strong);
-    font-weight: 800;
-    font-size: 0.92em;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    background: var(--bg-inset);
+    font-weight: 600;
     white-space: nowrap;
   }
 

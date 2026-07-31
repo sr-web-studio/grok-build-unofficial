@@ -38,6 +38,13 @@ recordings/**
 # Never ship a nested vsix
 *.vsix
 
+# Font sources. esbuild copies them to dist/fonts/ and rewrites the url()s in dist/webview.css to
+# point there, so shipping media/fonts/ too would duplicate ~176KB that nothing loads.
+media/fonts/**
+
+# Store/social promo art — used when publishing the listing, never loaded by the extension
+media/promo/**
+
 # Local debug screenshots
 issue*.png
 _issue*

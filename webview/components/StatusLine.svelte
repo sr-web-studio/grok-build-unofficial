@@ -52,150 +52,179 @@
   }
 </script>
 
-<div class="status" class:busy>
-  <span class="state {status.agentState}">●</span>
-  <!--
-    State label is a fixed-width slot. The old ''→.→..→… animation changed glyph width every
-    frame and shoved session title / folder left-right for the whole turn.
-  -->
-  <span class="label" data-state={status.agentState}>
-    <span class="label-text">{stateLabel[status.agentState]}</span>
-    {#if busy}
-      <span class="ellipsis" aria-hidden="true"><i></i><i></i><i></i></span>
-    {/if}
-  </span>
-
-  {#if status.sessionTitle}
-    <span class="sep">·</span>
-    <span class="session" title={status.sessionTitle}>{status.sessionTitle}</span>
-  {:else if status.sessionId}
-    <span class="sep">·</span>
-    <span class="session dim" title={status.sessionId}>new session</span>
-  {/if}
-
-  {#if folder}<span class="sep">·</span><span class="folder" title={status.cwd}>{folder}</span>{/if}
-
-  <span class="spacer"></span>
-
-  {#if contextPct !== undefined}
-    <button
-      type="button"
-      class="ctx"
-      class:ok={contextTone === 'ok'}
-      class:warn={contextTone === 'warn'}
-      class:hot={contextTone === 'hot'}
-      title="Context {contextPct}% — {status.lastTurnTotalTokens} / {status.contextTokens} tokens. Click for details."
-      onclick={onCtxClick}
-    >
-      ctx {contextPct}%
-    </button>
-    {#if contextTone === 'hot'}
-      <button
-        type="button"
-        class="compact-btn hot"
-        title="Context is nearly full — compact to free room"
-        onclick={onCompact}
-        disabled={busy}
-      >
-        Compact
-      </button>
-    {:else if contextTone === 'warn'}
-      <button
-        type="button"
-        class="compact-btn warn"
-        title="Compact conversation to free context"
-        onclick={onCompact}
-        disabled={busy}
-      >
-        Compact
-      </button>
-    {/if}
-  {/if}
-  {#if totalTokens > 0}
-    <span title="Session tokens (in + out); {compact(status.totals.cachedReadTokens)} cached reads">
-      {compact(totalTokens)} tok
+<div class="status">
+  <div class="status-left">
+    <span class="state-dot {status.agentState}"></span>
+    <span class="label-slot">
+      <span class="label-text">{stateLabel[status.agentState]}</span>
+      {#if busy}
+        <span class="ellipsis" aria-hidden="true"><i></i><i></i><i></i></span>
+      {/if}
     </span>
-  {/if}
-  {#if status.totals.costUsd > 0}
-    <span title="{status.totals.turns} turns">${status.totals.costUsd.toFixed(3)}</span>
-  {/if}
-  {#if status.agentVersion}<span class="ver" title="Grok Build CLI">{status.agentVersion}</span>{/if}
+
+    {#if status.sessionTitle}
+      <span class="sep">·</span>
+      <span class="session" title={status.sessionTitle}>{status.sessionTitle}</span>
+    {:else if status.sessionId}
+      <span class="sep">·</span>
+      <span class="session dim" title={status.sessionId}>new session</span>
+    {/if}
+
+    {#if folder}
+      <span class="sep sep-folder">·</span>
+      <span class="folder" title={status.cwd}>{folder}</span>
+    {/if}
+  </div>
+
+  <div class="status-right">
+    {#if contextPct !== undefined}
+      <button
+        type="button"
+        class="ctx-badge"
+        class:warn={contextTone === 'warn'}
+        class:hot={contextTone === 'hot'}
+        title="Context {contextPct}% — {status.lastTurnTotalTokens} / {status.contextTokens} tokens. Click for details."
+        onclick={onCtxClick}
+      >
+        <span>ctx {contextPct}%</span>
+        <div class="ctx-meter">
+          <div class="ctx-fill" style="width: {contextPct}%;"></div>
+        </div>
+      </button>
+      {#if contextTone === 'hot'}
+        <button
+          type="button"
+          class="compact-btn hot"
+          title="Context is nearly full — compact to free room"
+          onclick={onCompact}
+          disabled={busy}
+        >
+          Compact
+        </button>
+      {:else if contextTone === 'warn'}
+        <button
+          type="button"
+          class="compact-btn warn"
+          title="Compact conversation to free context"
+          onclick={onCompact}
+          disabled={busy}
+        >
+          Compact
+        </button>
+      {/if}
+    {/if}
+
+    {#if totalTokens > 0}
+      <span class="sep sep-tokens">·</span>
+      <span class="tokens-val" title="Session tokens (in + out); {compact(status.totals.cachedReadTokens)} cached reads">
+        {compact(totalTokens)} tok
+      </span>
+    {/if}
+
+    {#if status.totals.costUsd > 0}
+      <span class="sep sep-cost">·</span>
+      <span class="cost-val" title="{status.totals.turns} turns">${status.totals.costUsd.toFixed(3)}</span>
+    {/if}
+
+    {#if status.agentVersion}
+      <span class="sep sep-ver">·</span>
+      <span class="ver-val" title="Grok Build CLI">{status.agentVersion}</span>
+    {/if}
+  </div>
 </div>
 
 {#if status.error && !status.setupHint}
-  <!-- When setupHint is set, the Setup card owns the message — avoid a second dump here. -->
   <div class="error" title={status.error}>{status.error}</div>
 {:else if status.setupHint}
   <div class="error soft" title={status.setupHint.detail}>{status.setupHint.title} — see setup below</div>
 {/if}
 
 <style>
-  /* Sits directly under the header, so it owns the rule that separates it from the transcript. */
   .status {
-    flex: 0 0 auto;
+    height: 24px;
+    background-color: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0 var(--space-3);
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 7px 12px;
-    border-bottom: 1px solid var(--gb-rule);
-    font-size: var(--gb-meta-size);
-    color: var(--gb-dim);
-    font-family: var(--gb-mono);
-  }
-
-  /*
-   * One line, always. Without this a flex item happily shrinks below its text and wraps
-   * internally — "waiting for you" became two rows in a narrow sidebar. The folder and the
-   * version are the two that may be ellipsed instead; everything else keeps its full width.
-   */
-  .status > span {
+    justify-content: space-between;
+    font-size: 11.5px;
+    line-height: 1.3;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    user-select: none;
     white-space: nowrap;
+    overflow: hidden;
+    flex-wrap: nowrap;
   }
 
-  .spacer {
-    flex: 1 1 auto;
+  .status-left,
+  .status-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    min-width: 0;
   }
 
-  .state {
-    font-size: 0.9em;
+  .status-left {
+    flex-shrink: 1;
   }
 
-  .state.idle {
-    color: var(--gb-ok);
+  .status-right {
+    flex-shrink: 0;
   }
 
-  .state.thinking {
-    color: var(--gb-accent);
-    animation: pulse 1.4s ease-in-out infinite;
+  .state-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 
-  .label {
+  .state-dot.idle {
+    background-color: var(--success);
+  }
+
+  .state-dot.thinking {
+    background-color: var(--accent);
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+
+  .state-dot.awaitingApproval {
+    background-color: var(--warning);
+  }
+
+  .state-dot.starting {
+    background-color: var(--accent);
+  }
+
+  .state-dot.stopped {
+    background-color: var(--text-faint);
+  }
+
+  @keyframes pulse {
+    0% { opacity: 0.4; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0.4; transform: scale(0.9); }
+  }
+
+  .label-slot {
+    font-weight: 500;
+    color: var(--text-muted);
+    flex-shrink: 0;
     display: inline-flex;
-    align-items: baseline;
-    flex: 0 0 auto;
-    /* Widest label is "waiting for you" — reserve so state flips do not shove the title. */
-    min-width: 12.5ch;
+    align-items: center;
   }
 
-  .status.busy .label {
-    color: var(--gb-accent);
-    font-weight: 700;
-  }
-
-  .label-text {
-    flex: 0 0 auto;
-  }
-
-  /*
-   * Three fixed dots — opacity only. Never change the string width (that was the shove).
-   */
   .ellipsis {
     display: inline-flex;
     align-items: center;
     gap: 2px;
     width: 1.1em;
     margin-left: 1px;
-    flex: 0 0 auto;
+    flex-shrink: 0;
   }
 
   .ellipsis i {
@@ -203,7 +232,7 @@
     width: 2px;
     height: 2px;
     border-radius: 50%;
-    background: currentColor;
+    background-color: currentColor;
     opacity: 0.25;
     animation: ellipsis-dot 1.2s ease-in-out infinite;
   }
@@ -217,147 +246,161 @@
   }
 
   @keyframes ellipsis-dot {
-    0%,
-    80%,
-    100% {
-      opacity: 0.25;
-    }
-    40% {
-      opacity: 1;
-    }
+    0%, 80%, 100% { opacity: 0.25; }
+    40% { opacity: 1; }
   }
 
-  .state.awaitingApproval {
-    color: var(--gb-warn);
+  .sep {
+    color: var(--text-faint);
+    flex-shrink: 0;
   }
 
-  .state.starting {
-    color: var(--gb-plan);
-  }
-
-  .state.stopped {
-    color: var(--gb-dim);
-  }
-
-  @keyframes pulse {
-    50% {
-      opacity: 0.35;
-    }
-  }
-
-  /* Session title is the primary "where am I?" cue — prefer it over folder when space is tight. */
   .session {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 14em;
+    color: var(--text);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--vscode-foreground);
-    font-family: var(--vscode-font-family);
-    font-size: 1em;
+    max-width: 110px;
+    min-width: 0;
+    flex-shrink: 1;
   }
 
   .session.dim {
-    color: var(--gb-dim);
+    color: var(--text-faint);
     font-style: italic;
   }
 
-  .folder,
-  .ver {
-    flex: 0 1 auto;
-    min-width: 0;
+  .folder {
+    color: var(--text-muted);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 10em;
+    max-width: 90px;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .ctx-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  .ctx-badge:hover {
+    color: var(--text);
+  }
+
+  .ctx-meter {
+    width: 24px;
+    height: 3px;
+    background-color: var(--border-strong);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  .ctx-fill {
+    height: 100%;
+    background-color: var(--accent);
+  }
+
+  .ctx-badge.warn .ctx-fill {
+    background-color: var(--warning);
+  }
+
+  .ctx-badge.hot .ctx-fill {
+    background-color: var(--danger);
+  }
+
+  .compact-btn {
+    background: transparent;
+    border: none;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0 4px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+  }
+
+  .compact-btn.warn {
+    color: var(--warning);
+  }
+
+  .compact-btn.hot {
+    color: var(--danger);
+  }
+
+  .compact-btn:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+  }
+
+  .compact-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .tokens-val,
+  .cost-val,
+  .ver-val {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  @container (max-width: 650px) {
+    .ver-val, .sep-ver { display: none !important; }
+  }
+
+  @container (max-width: 520px) {
+    .cost-val, .sep-cost { display: none !important; }
+  }
+
+  @container (max-width: 380px) {
+    .tokens-val, .sep-tokens { display: none !important; }
+  }
+
+  @container (max-width: 320px) {
+    .folder, .sep-folder { display: none !important; }
+  }
+
+  @media (max-width: 650px) {
+    .ver-val, .sep-ver { display: none; }
+  }
+
+  @media (max-width: 520px) {
+    .cost-val, .sep-cost { display: none; }
+  }
+
+  @media (max-width: 380px) {
+    .tokens-val, .sep-tokens { display: none; }
+  }
+
+  @media (max-width: 320px) {
+    .folder, .sep-folder { display: none; }
   }
 
   .error {
     flex: 0 0 auto;
-    padding: 5px 10px;
-    border-bottom: 1px solid var(--gb-danger);
-    background: color-mix(in srgb, var(--gb-danger) 12%, transparent);
-    font-family: var(--gb-mono);
-    font-size: var(--gb-meta-size);
-    color: var(--gb-danger);
+    padding: 4px var(--space-3);
+    border-bottom: 1px solid var(--border);
+    background-color: var(--bg-inset);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--danger);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .error.soft {
-    border-bottom-color: var(--gb-warn);
-    background: color-mix(in srgb, var(--gb-warn) 12%, transparent);
-    color: var(--vscode-foreground);
-  }
-
-  .ctx {
-    flex: 0 0 auto;
-    margin: 0;
-    padding: 2px 8px;
-    border: 1px solid transparent;
-    border-radius: 999px;
-    background: none;
-    font: inherit;
-    font-family: var(--gb-mono);
-    font-size: inherit;
-    font-weight: 700;
-    cursor: pointer;
-    color: var(--gb-dim);
-  }
-
-  .ctx.ok {
-    color: var(--gb-ok);
-  }
-
-  .ctx.warn {
-    color: var(--gb-warn);
-    border-color: color-mix(in srgb, var(--gb-warn) 45%, transparent);
-    background: color-mix(in srgb, var(--gb-warn) 12%, transparent);
-  }
-
-  .ctx.hot {
-    color: var(--gb-danger);
-    border-color: color-mix(in srgb, var(--gb-danger) 50%, transparent);
-    background: color-mix(in srgb, var(--gb-danger) 14%, transparent);
-  }
-
-  .ctx:hover {
-    filter: brightness(1.08);
-  }
-
-  .compact-btn {
-    flex: 0 0 auto;
-    margin: 0;
-    padding: 2px 9px;
-    border: 1px solid var(--gb-rule);
-    border-radius: 999px;
-    background: none;
-    font: inherit;
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    cursor: pointer;
-    color: var(--vscode-foreground);
-  }
-
-  .compact-btn.warn {
-    border-color: var(--gb-warn);
-    color: var(--gb-warn);
-  }
-
-  .compact-btn.hot {
-    border-color: var(--gb-danger);
-    color: var(--gb-danger);
-    background: color-mix(in srgb, var(--gb-danger) 12%, transparent);
-  }
-
-  .compact-btn:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
-
-  .compact-btn:disabled {
-    opacity: 0.45;
-    cursor: default;
+    color: var(--text-muted);
   }
 </style>

@@ -193,7 +193,7 @@ function approvalBlocks() {
       request: {
         requestId: 'req-write-1',
         kind: 'write',
-        title: 'Write webview/components/StatusLine.svelte',
+        title: 'Edit file',
         path: `${CWD}/webview/components/StatusLine.svelte`,
         oldText: OLD_FILE,
         newText: NEW_FILE,
@@ -207,7 +207,7 @@ function approvalBlocks() {
       request: {
         requestId: 'req-cmd-1',
         kind: 'command',
-        title: 'Run npm run typecheck',
+        title: 'Run command',
         command: 'npm run typecheck',
         cwd: CWD,
         alwaysScope: 'Bash(npm run typecheck:*)',
@@ -221,7 +221,7 @@ function approvalBlocks() {
       request: {
         requestId: 'req-cmd-0',
         kind: 'command',
-        title: 'Run git status --porcelain',
+        title: 'Run command',
         command: 'git status --porcelain',
         cwd: CWD,
       },

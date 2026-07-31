@@ -15,118 +15,150 @@
   const answered = $derived(block.decision !== undefined);
 </script>
 
-<div class="plan" class:answered class:rejected={block.decision === 'rejected'}>
-  <div class="head">
-    <span class="mark"><Icon name="layers" size={14} /></span>
-    <span class="title">Plan ready for review</span>
+<div class="gb-proposed-plan" class:answered class:rejected={block.decision === 'rejected'}>
+  <div class="gb-card-header">
+    <Icon name="layers" size={14} />
+    <span class="gb-card-kicker">PLAN PROPOSAL</span>
     {#if answered}
-      <span class="verdict gb-meta">{block.decision === 'approved' ? 'Approved' : 'Rejected'}</span>
+      <div class="gb-verdict-line">
+        {#if block.decision === 'approved'}
+          <Icon name="check" size={14} />
+          <span>Approved &amp; started</span>
+        {:else}
+          <Icon name="close" size={14} />
+          <span>Rejected</span>
+        {/if}
+      </div>
     {/if}
   </div>
 
-  <div class="content"><Markdown text={block.content} /></div>
+  <div class="gb-prose-content"><Markdown text={block.content} /></div>
 
   {#if !answered}
     {#if showFeedback}
       <textarea
         bind:value={feedback}
+        class="gb-feedback-input"
         placeholder="What should change? This is sent back to the agent."
         rows="3"
       ></textarea>
     {/if}
-    <div class="actions">
-      <button class="gb-btn primary" onclick={() => onDecide(block.requestId, true)}>
-        Approve &amp; start coding
+    <div class="gb-action-group">
+      <button class="gb-btn-primary" onclick={() => onDecide(block.requestId, true)}>
+        Approve &amp; start
       </button>
       {#if showFeedback}
-        <button class="gb-btn ghost danger" onclick={() => onDecide(block.requestId, false, feedback)}>
+        <button class="gb-btn-ghost-danger" onclick={() => onDecide(block.requestId, false, feedback)}>
           Send feedback
         </button>
       {:else}
-        <button class="gb-btn ghost" onclick={() => (showFeedback = true)}>Request changes</button>
-        <button class="gb-btn ghost danger" onclick={() => onDecide(block.requestId, false)}>Reject</button>
+        <button class="gb-btn-secondary" onclick={() => (showFeedback = true)}>Request changes</button>
+        <button class="gb-btn-ghost-danger" onclick={() => onDecide(block.requestId, false)}>Reject</button>
       {/if}
     </div>
-    <div class="hint gb-meta">
+    <div class="gb-hint">
       Approving leaves plan mode, so writes and commands start asking for approval again.
     </div>
   {/if}
 </div>
 
 <style>
-  /* Like the approval card, this one blocks the turn — so it gets the same 2px frame, in the
-     plan hue rather than the warning one. */
-  .plan {
+  /* Proposed Plan Card (Level 1 — Raised, no 2px blue frame) */
+  .gb-proposed-plan {
+    background-color: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: 7px;
-    padding: 9px 10px;
-    border: 2px solid var(--gb-plan);
-    border-radius: var(--gb-radius);
-    background: color-mix(in srgb, var(--gb-plan) 8%, var(--gb-surface));
+    gap: var(--space-3);
   }
 
-  .plan.answered {
-    border-color: var(--gb-rule);
-    background: var(--gb-surface);
-    opacity: 0.8;
+  .gb-proposed-plan.answered {
+    opacity: 1;
   }
 
-  .plan.rejected {
-    border-color: var(--gb-danger);
-  }
-
-  .head {
+  .gb-card-header {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: var(--space-2);
   }
 
-  .mark {
-    display: flex;
-    align-items: center;
-    color: var(--gb-plan);
+  .gb-card-header :global(svg) {
+    color: var(--text-muted);
   }
 
-  .plan.answered .mark {
-    color: var(--gb-dim);
-  }
-
-  .title {
-    font-weight: 800;
-    font-size: 12.5px;
+  .gb-card-kicker {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
     flex: 1 1 auto;
   }
 
-  .verdict {
-    flex: 0 0 auto;
+  .gb-verdict-line {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  .content {
+  .gb-verdict-line :global(svg) {
+    color: var(--success);
+  }
+
+  .gb-proposed-plan.rejected .gb-verdict-line :global(svg) {
+    color: var(--danger);
+  }
+
+  .gb-prose-content {
     max-height: 30em;
     overflow: auto;
+    font-size: 12.5px;
   }
 
-  textarea {
+  /* Inputs (§1 focus rule): border to --focus at 1px + single outline offset 0. No double ring. */
+  .gb-feedback-input {
     width: 100%;
     box-sizing: border-box;
     resize: vertical;
-    padding: 6px 7px;
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border, var(--gb-rule));
-    border-radius: var(--gb-radius);
-    font: inherit;
-    font-size: 13px;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-inset);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
   }
 
-  .actions {
+  .gb-feedback-input:focus-visible {
+    border-color: var(--focus);
+    outline: 1px solid var(--focus);
+    outline-offset: 0;
+  }
+
+  .gb-action-group {
     display: flex;
+    align-items: center;
+    gap: var(--space-2);
     flex-wrap: wrap;
-    gap: 5px;
   }
 
-  .danger {
-    color: var(--gb-danger);
+
+
+
+
+
+
+  button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .gb-hint {
+    font-size: 11.5px;
+    color: var(--text-muted);
   }
 </style>

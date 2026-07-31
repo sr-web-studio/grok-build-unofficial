@@ -1792,10 +1792,9 @@ export class GrokSession implements vscode.Disposable {
       const decision = await this.askApproval({
         requestId: `apr-${++this.approvalSeq}`,
         kind: 'write',
-        title:
-          oldText === null && !exists
-            ? `Create ${path.basename(params.path)}`
-            : `Edit ${path.basename(params.path)}`,
+        // Verb only: the card renders the file itself as a clickable, workspace-relative path
+        // right below, and naming the basename here too made the same file read twice.
+        title: oldText === null && !exists ? 'Create file' : 'Edit file',
         path: params.path,
         oldText: oldText ?? undefined,
         newText: params.content,

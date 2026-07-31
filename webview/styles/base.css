@@ -1,0 +1,150 @@
+/*
+ * Global baseline: reset, body type, focus, scrollbar, and the shared modal/card button set.
+ *
+ * The --gb-* compatibility aliases that stood here during the port are gone: Phase 2 restyled
+ * every component against the tokens directly, so nothing referenced them any more and a second
+ * name for --space-2 is only a way for the two to drift apart. Use the tokens in tokens.css.
+ * The old `.gb-btn` utility went with them — every surface uses the `.gb-btn-*` set below.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* §1 Focus — one layer, desaturated --focus, never a box-shadow glow. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--accent-subtle);
+  color: var(--text);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+/*
+ * `.gb-kicker`, `.gb-tag`, `.gb-meta` and `.gb-caret` used to live here. After Phase 2 no
+ * component referenced any of them — each owns its kicker and meta styling now, and the streaming
+ * caret is `.prose.caret` in Transcript.svelte. Global classes nothing applies are worse than
+ * absent: they look like the shared vocabulary while quietly diverging from the real one.
+ */
+
+/*
+ * Modal / card buttons: the shared vocabulary.
+ *
+ * `.gb-btn-primary`, `-secondary`, `-ghost` and `-ghost-danger` were declared five times over —
+ * App, About, Approval, PlanProposal and Question each carried a byte-identical copy. Identical
+ * today is not identical after the next tweak, and one button drifting is exactly the
+ * inconsistency this design system exists to remove. One definition, one look.
+ *
+ * Focus comes from the global `:focus-visible` rule above; these do not restate it.
+ */
+.gb-btn-primary,
+.gb-btn-secondary,
+.gb-btn-ghost,
+.gb-btn-ghost-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.gb-btn-primary {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.gb-btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.gb-btn-secondary {
+  background-color: var(--bg-hover);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.gb-btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-active);
+}
+
+.gb-btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.gb-btn-ghost:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+  color: var(--text);
+}
+
+.gb-btn-ghost-danger {
+  background: transparent;
+  color: var(--danger);
+}
+
+.gb-btn-ghost-danger:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+}
+
+.gb-btn-primary:disabled,
+.gb-btn-secondary:disabled,
+.gb-btn-ghost:disabled,
+.gb-btn-ghost-danger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

@@ -8,6 +8,7 @@
     TranscriptBlock,
   } from '../../src/shared/protocol';
   import Approval from './Approval.svelte';
+  import Icon from './Icon.svelte';
   import Markdown from './Markdown.svelte';
   import Notice from './Notice.svelte';
   import PlanProposal from './PlanProposal.svelte';
@@ -28,9 +29,6 @@
     setupHint?: SetupHint;
     /** Host is replaying a long session — show a shell, no scroll thrash. */
     loadingHistory?: boolean;
-    /** Bound by App so the chat-layer Latest button can sit above Plan / other overlays. */
-    jumpVisible?: boolean;
-    onJumpReady?: (api: { scrollToBottom: () => void }) => void;
     onApprove: (requestId: string, decision: ApprovalDecision) => void;
     onPlanDecision: (requestId: string, approve: boolean, feedback?: string) => void;
     onAnswerQuestion: (requestId: string, response: QuestionResponse) => void;
@@ -48,8 +46,6 @@
     agentState,
     setupHint = undefined,
     loadingHistory = false,
-    jumpVisible = $bindable(false),
-    onJumpReady,
     onApprove,
     onPlanDecision,
     onAnswerQuestion,
@@ -64,7 +60,8 @@
   let stickyUserId = $state<string | null>(null);
   /** Expanded long user messages by block id. */
   let expandedUsers = $state<Record<string, boolean>>({});
-
+  /** Message-level copy confirmation timers by block id. */
+  let copiedIds = $state<Record<string, boolean>>({});
 
   /** Collapse long user text in-chat and in the sticky bar (≈3 lines / 160 chars). */
   const COLLAPSE_AT = 160;
@@ -80,8 +77,8 @@
   );
 
   /**
-   * Group leading thought blocks with the following assistant message so the "Grok" label sits
-   * above thinking (ACP still streams thought first; this is display order only).
+   * Group leading thought blocks with the following assistant message so thinking sits
+   * above the prose (ACP still streams thought first; this is display order only).
    */
   type Row =
     | { kind: 'grok'; thoughts: Extract<TranscriptBlock, { kind: 'thinking' }>[]; text: Extract<TranscriptBlock, { kind: 'text' }> }
@@ -125,11 +122,14 @@
     return b?.kind === 'text' ? b : undefined;
   });
 
+  /** Pill visibility. This component owns the pill; it is positioned against the scroller. */
+  let showScrollPill = $state(false);
+
   function onScroll() {
     if (!scroller) return;
     const slack = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
     stuck = slack < 48;
-    jumpVisible = !stuck && visible.length > 0;
+    showScrollPill = !stuck && visible.length > 0;
 
     // Among every user row, pick the last one that has fully scrolled above the top edge.
     // Scrolling further up promotes earlier messages into the sticky bar.
@@ -150,12 +150,8 @@
     scroller.scrollTop = scroller.scrollHeight;
     stuck = true;
     stickyUserId = null;
-    jumpVisible = false;
+    showScrollPill = false;
   }
-
-  $effect(() => {
-    onJumpReady?.({ scrollToBottom });
-  });
 
   function scrollToStickyUser() {
     if (!scroller || !stickyUserId) return;
@@ -203,6 +199,37 @@
     if (img.webviewUri) return img.webviewUri;
     return '';
   }
+
+  async function copyText(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } finally {
+        ta.remove();
+      }
+    }
+  }
+
+  async function copyMessage(id: string, text: string, event: MouseEvent) {
+    // Nested code-block copy must not fire the message-level copy.
+    const t = event.target;
+    if (t instanceof Element && t.closest('[data-md-copy]')) return;
+    event.stopPropagation();
+    if (!text) return;
+    await copyText(text);
+    copiedIds = { ...copiedIds, [id]: true };
+    window.setTimeout(() => {
+      copiedIds = { ...copiedIds, [id]: false };
+    }, 1200);
+  }
 </script>
 
 <div class="wrap">
@@ -220,9 +247,8 @@
   {#if stickyUserBlock && !statusLoading}
     <div class="sticky-user" class:was-queued={stickyUserBlock.wasQueued}>
       <button class="sticky-main" type="button" title="Jump to this message" onclick={scrollToStickyUser}>
-        <span class="role gb-kicker">You</span>
         {#if stickyUserBlock.wasQueued}
-          <span class="queue-pill">queued</span>
+          <span class="queue-label">queued</span>
         {/if}
         {#if stickyUserBlock.images?.length}
           {@const src = thumb(stickyUserBlock.images[0])}
@@ -242,14 +268,13 @@
       <SetupCard hint={setupHint} />
     {:else if visible.length === 0 && !statusLoading}
       <div class="empty">
-        <p class="unofficial-line">
-          <span class="gb-tag">Unofficial</span>
-          Community UI for the Grok Build CLI — not affiliated with xAI.
-        </p>
-        <p>Ask Grok to do something in this workspace.</p>
-        <p class="dim">
-          Writes and commands wait for your approval. <kbd>Enter</kbd> sends,
-          <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line, paste a screenshot, <kbd>Esc</kbd> stops the turn.
+        <div class="empty-brand">
+          <span class="wordmark">◆ GROK BUILD</span>
+          <span class="unofficial">Unofficial</span>
+        </div>
+        <p class="empty-line">Ask anything about this workspace.</p>
+        <p class="empty-hint">
+          <kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>Esc</kbd> stops
         </p>
       </div>
     {/if}
@@ -264,7 +289,7 @@
         prev.block.kind === 'tool'}
       <div
         class="row"
-        class:tucked={stacked}
+        class:is-tool={row.kind === 'single' && block.kind === 'tool'}
         class:msg-user={row.kind === 'single' && block.kind === 'text' && block.role === 'user'}
         class:msg-assistant={row.kind === 'grok' || (row.kind === 'single' && block.kind === 'text' && block.role === 'assistant')}
         class:after-user={
@@ -276,16 +301,29 @@
         data-user-id={row.kind === 'single' && block.kind === 'text' && block.role === 'user' ? block.id : undefined}
       >
         {#if row.kind === 'grok'}
-          <div class="bubble assistant" class:gb-caret={row.text.streaming}>
-            <div class="role gb-kicker">Grok</div>
+          <div class="assistant" class:streaming={row.text.streaming}>
             {#each row.thoughts as thought (thought.id)}
               <div class="nested-think">
                 <Thinking block={thought} autoExpand={autoExpandThinking} />
               </div>
             {/each}
             {#if row.text.text}
-              <div class="body">
+              <div class="prose" class:caret={row.text.streaming}>
                 <Markdown text={row.text.text} streaming={row.text.streaming} />
+              </div>
+              <div class="assistant-actions">
+                <button
+                  type="button"
+                  class="msg-copy-assistant"
+                  class:copied={copiedIds[row.text.id]}
+                  class:revealed={copiedIds[row.text.id]}
+                  title="Copy markdown"
+                  aria-label={copiedIds[row.text.id] ? 'Copied' : 'Copy markdown'}
+                  onclick={(e) => copyMessage(row.text.id, row.text.text, e)}
+                >
+                  <Icon name={copiedIds[row.text.id] ? 'check' : 'copy'} size={12} />
+                  <span aria-live="polite">{copiedIds[row.text.id] ? 'Copied' : 'Copy'}</span>
+                </button>
               </div>
             {/if}
           </div>
@@ -293,22 +331,21 @@
           {#if block.role === 'user'}
             {@const long = isLong(block.text)}
             {@const open = expandedUsers[block.id] ?? false}
-            <div class="bubble user" class:was-queued={block.wasQueued} class:collapsed={long && !open}>
-              <div class="role-row">
-                <div class="role gb-kicker">You</div>
-                {#if block.wasQueued}
-                  <span class="queue-pill" title="This was sent from the queue">queued</span>
-                {/if}
-                {#if long}
-                  <button
-                    class="expand"
-                    type="button"
-                    onclick={() => toggleExpand(block.id)}
-                  >
-                    {open ? 'Collapse' : 'Expand'}
-                  </button>
-                {/if}
-              </div>
+            <div class="user" class:was-queued={block.wasQueued} class:collapsed={long && !open}>
+              <button
+                type="button"
+                class="msg-copy-user"
+                class:copied={copiedIds[block.id]}
+                class:revealed={copiedIds[block.id]}
+                title="Copy message"
+                aria-label={copiedIds[block.id] ? 'Copied' : 'Copy message'}
+                onclick={(e) => copyMessage(block.id, block.text, e)}
+              >
+                <Icon name={copiedIds[block.id] ? 'check' : 'copy'} size={12} />
+              </button>
+              {#if block.wasQueued}
+                <span class="queue-label" title="This was sent from the queue">queued</span>
+              {/if}
               {#if block.images?.length}
                 <div class="imgs">
                   {#each block.images as img (img.id)}
@@ -322,14 +359,36 @@
                 </div>
               {/if}
               {#if block.text}
-                <div class="body">{open || !long ? block.text : previewText(block.text)}</div>
+                <div class="user-text">{open || !long ? block.text : previewText(block.text)}</div>
+              {/if}
+              {#if long}
+                <button
+                  class="show-more"
+                  type="button"
+                  onclick={() => toggleExpand(block.id)}
+                >
+                  {open ? 'show less' : 'show more'}
+                </button>
               {/if}
             </div>
           {:else}
-            <div class="bubble assistant" class:gb-caret={block.streaming}>
-              <div class="role gb-kicker">Grok</div>
-              <div class="body">
+            <div class="assistant" class:streaming={block.streaming}>
+              <div class="prose" class:caret={block.streaming}>
                 <Markdown text={block.text} streaming={block.streaming} />
+              </div>
+              <div class="assistant-actions">
+                <button
+                  type="button"
+                  class="msg-copy-assistant"
+                  class:copied={copiedIds[block.id]}
+                  class:revealed={copiedIds[block.id]}
+                  title="Copy markdown"
+                  aria-label={copiedIds[block.id] ? 'Copied' : 'Copy markdown'}
+                  onclick={(e) => copyMessage(block.id, block.text, e)}
+                >
+                  <Icon name={copiedIds[block.id] ? 'check' : 'copy'} size={12} />
+                  <span aria-live="polite">{copiedIds[block.id] ? 'Copied' : 'Copy'}</span>
+                </button>
               </div>
             </div>
           {/if}
@@ -342,7 +401,7 @@
         {:else if block.kind === 'question'}
           <Question {block} onAnswer={onAnswerQuestion} />
         {:else if block.kind === 'approval'}
-          <Approval {block} onDecide={onApprove} />
+          <Approval {block} {cwd} {onOpenPath} onDecide={onApprove} />
         {:else if block.kind === 'notice'}
           <Notice {block} {onShowLog} />
         {:else if block.kind === 'turn'}
@@ -351,6 +410,18 @@
       </div>
     {/each}
 
+    {#if showScrollPill}
+      <button
+        type="button"
+        class="scroll-pill"
+        title="Jump to latest"
+        aria-label="Jump to latest"
+        onclick={scrollToBottom}
+      >
+        <Icon name="arrowDown" size={12} />
+        <span>Latest</span>
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -371,21 +442,17 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 24px;
-    background: color-mix(
-      in srgb,
-      var(--vscode-sideBar-background, var(--vscode-editor-background)) 92%,
-      transparent
-    );
+    gap: var(--space-3);
+    padding: var(--space-5);
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
     text-align: center;
   }
 
   .loading-spinner {
     width: 28px;
     height: 28px;
-    border: 2.5px solid color-mix(in srgb, var(--gb-accent) 30%, transparent);
-    border-top-color: var(--gb-accent);
+    border: 2.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-top-color: var(--accent);
     border-radius: 50%;
     animation: load-spin 0.7s linear infinite;
   }
@@ -399,32 +466,59 @@
   .loading-copy {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-1);
     max-width: 22em;
     font-size: 0.92em;
-    color: var(--gb-dim);
+    color: var(--text-muted);
   }
 
   .loading-copy strong {
-    color: var(--vscode-foreground);
+    color: var(--text);
     font-size: 1.05em;
   }
 
+  /*
+   * Rhythm is a margin on the child, never a flex gap. A gap applies to every sibling pair and
+   * cannot be overridden for one pair — that is what made a run of tool rows look uneven.
+   */
   .scroller {
     flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
-    /* Room for the Latest chip. Vertical rhythm via .row margins only (no gap+margin). */
-    padding: 14px 12px 52px;
+    padding: var(--space-3);
     display: flex;
     flex-direction: column;
     gap: 0;
+    position: relative;
+    background-color: var(--bg);
   }
 
   .scroller.dimmed {
     opacity: 0.25;
     pointer-events: none;
     overflow: hidden;
+  }
+
+  /* Default rhythm between transcript blocks. Scroll pill is an overlay — excluded. */
+  .scroller > *:not(.scroll-pill) + *:not(.scroll-pill) {
+    margin-top: var(--space-3);
+  }
+
+  /*
+   * Adjacent tool blocks sit at gap 0 — a tool run is one ruled list.
+   * Class is set on the .row wrapper (Svelte scoping would break :has(.tool-row) across
+   * component boundaries; the mock uses :has because its markup is flat).
+   */
+  .scroller > .row.is-tool + .row.is-tool {
+    margin-top: 0;
+  }
+
+  /* Measure cap for flow content in a wide panel; never size the scroll pill. */
+  .scroller > *:not(.scroll-pill):not(.empty) {
+    width: 100%;
+    max-width: 72ch;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   /*
@@ -439,20 +533,16 @@
     z-index: 5;
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--gb-rule);
-    background: color-mix(
-      in srgb,
-      var(--gb-accent) 14%,
-      var(--vscode-sideBar-background, var(--vscode-editor-background))
-    );
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+    gap: var(--space-2);
+    padding: 6px var(--space-3);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-raised);
+    box-shadow: var(--shadow-overlay);
     pointer-events: auto;
   }
 
   .sticky-user.was-queued {
-    border-bottom-color: color-mix(in srgb, var(--gb-warn) 50%, var(--gb-rule));
+    border-bottom-color: color-mix(in srgb, var(--warning) 50%, var(--border));
   }
 
   .sticky-main {
@@ -477,46 +567,19 @@
     width: 22px;
     height: 22px;
     object-fit: cover;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius-sm);
-    background: var(--gb-surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-inset);
   }
 
   .sticky-text {
     flex: 1 1 8em;
     min-width: 0;
-    /* One line in the pin bar — multi-line pre-wrap made the strip look tall/"stretched". */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.92em;
-  }
-
-  .expand {
-    flex: 0 0 auto;
-    margin-left: auto;
-    padding: 2px 8px;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius-sm);
-    background: color-mix(in srgb, var(--vscode-editor-background) 70%, transparent);
-    color: var(--gb-accent);
-    font: inherit;
-    font-size: 10px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  .expand:hover {
-    border-color: var(--gb-accent);
-  }
-
-  .user.collapsed .body {
-    max-height: 4.6em;
-    overflow: hidden;
-  }
-
-  .role-row .expand {
-    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-muted);
   }
 
   .row {
@@ -525,169 +588,293 @@
     min-width: 0;
   }
 
-  /* Default spacing between every transcript card. */
-  .row + .row {
-    margin-top: var(--gb-stack-gap);
-  }
-
-  /* Stacked tools: same rhythm as other cards (no tuck / no special case). */
-  .row.tucked {
-    margin-top: var(--gb-stack-gap);
-  }
-
-  /* You↔Grok turn boundary — one clear step larger, not additive on top of stack-gap. */
-  .row.after-user,
-  .row.msg-assistant + .row.msg-user {
-    margin-top: var(--gb-stack-turn);
+  /* You↔Grok turn boundary — slightly larger step when assistant follows user. */
+  .scroller > .row.after-user,
+  .scroller > .row.msg-assistant + .row.msg-user {
+    margin-top: var(--space-4);
   }
 
   .nested-think {
-    margin: 0 0 var(--gb-gap);
+    margin: 0 0 var(--space-2);
   }
 
   .nested-think:last-of-type {
-    margin-bottom: var(--gb-space);
+    margin-bottom: var(--space-3);
   }
 
-  .bubble {
-    min-width: 0;
-  }
-
-  .role {
-    margin-bottom: 10px;
-    letter-spacing: 0.04em;
-  }
-
-  .role-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-
-  .role-row .role {
-    margin-bottom: 0;
-  }
-
-  .user .role {
-    color: var(--gb-accent);
-  }
-
-  .assistant .role {
-    color: var(--gb-dim);
-  }
-
+  /* User message — raised bubble, no accent border, right-shifted. */
   .user {
-    padding: 12px 14px;
-    border: 1px solid color-mix(in srgb, var(--gb-accent) 28%, var(--gb-rule));
-    border-left: 3px solid var(--gb-accent);
-    background: color-mix(
-      in srgb,
-      var(--gb-accent) 10%,
-      var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.12))
-    );
-    border-radius: var(--gb-radius-lg);
+    position: relative;
+    background-color: var(--bg-raised);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    padding-right: 32px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--text);
+    align-self: flex-end;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-left: auto;
   }
 
-  .user .body {
+  .user.collapsed .user-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .user-text {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    color: var(--vscode-foreground);
-    line-height: 1.65;
   }
 
-  /* After force-push / auto-flush — in chat, with a permanent badge. */
-  .user.was-queued {
-    border-left-color: var(--gb-warn);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gb-warn) 28%, transparent);
+  .queue-label {
+    font-size: 11px;
+    color: var(--warning);
+    font-weight: 500;
   }
 
-  .queue-pill {
-    flex: 0 0 auto;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--gb-warn) 85%, transparent);
-    color: var(--vscode-editor-background);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+  .show-more {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    align-self: flex-start;
+  }
+
+  .show-more:hover {
+    color: var(--text);
+    background-color: var(--bg-hover);
   }
 
   .imgs {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start; /* default stretch was warping <img> on the cross axis */
-    gap: 8px;
-    margin-bottom: 10px;
+    align-items: flex-start;
+    gap: var(--space-2);
   }
 
   .img {
-    /* Never force both axes — flex stretch + only max-* made wide screenshots look tall. */
     display: block;
     flex: 0 0 auto;
-    width: auto;
-    height: auto;
-    max-width: min(100%, 280px);
-    max-height: 140px;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    object-fit: contain;
-    object-position: left top;
-    background: var(--gb-surface-sunken);
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    background: var(--bg-inset);
   }
 
   .img-fallback {
     display: inline-flex;
     align-items: center;
     padding: 6px 10px;
-    border: 1px dashed var(--gb-rule);
-    border-radius: var(--gb-radius-sm);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
     font-size: 11px;
-    color: var(--gb-dim);
+    color: var(--text-muted);
   }
 
+  /* Assistant — no container; prose flows on --bg. */
   .assistant {
-    position: relative;
-    z-index: 0;
-    padding: 2px 0 6px;
+    min-width: 0;
   }
 
-  .assistant .body {
-    line-height: 1.72;
+  .prose {
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--text);
   }
 
-  .empty {
-    padding: 22px 6px;
-    color: var(--vscode-foreground);
-    line-height: 1.55;
+  /* Streaming caret: 2px × 1.1em --text at 60% opacity, 1s blink — no color. */
+  .prose.caret::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 1.1em;
+    background-color: var(--text);
+    opacity: 0.6;
+    vertical-align: middle;
+    margin-left: 2px;
+    animation: caret-blink 1s infinite step-start;
   }
 
-  .empty p {
-    margin: 0 0 12px;
+  @keyframes caret-blink {
+    50% {
+      opacity: 0;
+    }
   }
 
-  .empty .dim {
-    color: var(--gb-dim);
-    font-size: 0.9em;
-  }
-
-  .unofficial-line {
+  .assistant-actions {
+    height: 20px;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 12px !important;
-    font-size: 0.88em;
-    color: var(--gb-dim);
-    line-height: 1.4;
+    margin-top: 4px;
+  }
+
+  .msg-copy-user {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
+  }
+
+  .user:hover .msg-copy-user,
+  .msg-copy-user:focus-visible,
+  .msg-copy-user.revealed {
+    opacity: 1;
+  }
+
+  .msg-copy-user:hover {
+    color: var(--text-muted);
+    background-color: var(--bg-hover);
+  }
+
+  .msg-copy-assistant {
+    height: 20px;
+    padding: 2px 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-faint);
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
+  }
+
+  .prose:hover + .assistant-actions .msg-copy-assistant,
+  .assistant-actions:hover .msg-copy-assistant,
+  .msg-copy-assistant:focus-visible,
+  .msg-copy-assistant.revealed {
+    opacity: 1;
+  }
+
+  .msg-copy-assistant:hover {
+    color: var(--text-muted);
+    background-color: var(--bg-hover);
+  }
+
+  .msg-copy-user.copied,
+  .msg-copy-assistant.copied {
+    color: var(--success);
+    opacity: 1;
+  }
+
+  /* First-run: logo + one centred line. Unofficial tag kept. */
+  .empty {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--space-5) var(--space-3);
+    min-height: 12rem;
+    max-width: none;
+  }
+
+  .empty-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: var(--space-5);
+  }
+
+  .wordmark {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .unofficial {
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  .empty-line {
+    margin: 0 0 var(--space-4);
+    font-size: 13.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .empty-hint {
+    margin: 0;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    line-height: 1.5;
   }
 
   kbd {
-    font-family: var(--gb-mono);
-    font-size: 0.9em;
+    font-family: var(--font-mono);
+    font-size: 11px;
     padding: 0 4px;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-inset);
+  }
+
+  /*
+   * Scroll-to-latest: overlay, content-width (~72px), 12px from scroller bottom-right.
+   * Chrome stretches absolute flex children across the cross axis — pin width to content.
+   */
+  .scroll-pill {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    width: max-content;
+    align-self: flex-start;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-full);
+    background-color: var(--bg-raised);
+    box-shadow: var(--shadow-overlay);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+
+  .scroll-pill:hover {
+    background-color: var(--bg-hover);
   }
 </style>

@@ -162,6 +162,21 @@
           "default": "",
           "description": "Reasoning effort to launch with. Empty uses the CLI default."
         },
+        "grokBuild.theme": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light",
+            "followVsCode"
+          ],
+          "default": "dark",
+          "enumDescriptions": [
+            "Always use the dark Grok Build palette.",
+            "Always use the light Grok Build palette.",
+            "Follow the VS Code color theme kind (light or dark) without sampling VS Code colours."
+          ],
+          "description": "Webview colour theme. The webview owns its own palette and does not inherit VS Code theme tokens."
+        },
         "grokBuild.showThinking": {
           "type": "boolean",
           "default": true,

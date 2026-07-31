@@ -39,8 +39,7 @@
     onRestart,
   }: Props = $props();
 
-  /** Two lines at rest (13px × 1.5 line-height × 2). */
-  const MIN_HEIGHT = 39;
+  const MIN_HEIGHT = 40;
   const MAX_HEIGHT = 220;
   const MAX_IMAGES = 6;
 
@@ -64,30 +63,35 @@
     label: string;
     hint: string;
     tone: 'neutral' | 'plan' | 'warn' | 'danger';
+    dotClass: 'ask' | 'accept' | 'plan' | 'bypass';
   }[] = [
     {
       id: 'default',
       label: 'Ask',
       hint: 'Ask — approve every file write and every command',
       tone: 'neutral',
+      dotClass: 'ask',
     },
     {
       id: 'acceptEdits',
-      label: 'Accept edits',
+      label: 'Accept',
       hint: 'Accept edits — writes auto-apply, commands still ask',
       tone: 'warn',
+      dotClass: 'accept',
     },
     {
       id: 'plan',
       label: 'Plan',
       hint: 'Plan — read-only until you approve a plan',
       tone: 'plan',
+      dotClass: 'plan',
     },
     {
       id: 'bypassPermissions',
       label: 'Bypass',
       hint: 'Bypass — no prompts; agent writes and runs freely',
       tone: 'danger',
+      dotClass: 'bypass',
     },
   ];
 
@@ -98,6 +102,16 @@
   const model = $derived(status.models.find((m) => m.modelId === status.currentModelId));
   const efforts = $derived(model?.reasoningEfforts ?? []);
   const mode = $derived(modes.find((m) => m.id === status.permissionMode) ?? modes[0]);
+
+  const currentEffortLabel = $derived.by(() => {
+    const e = status.reasoningEffort;
+    if (!e) return 'Medium';
+    const found = efforts.find((ef) => ef.id === e);
+    if (found) {
+      return found.label.replace(/\s+Effort$/i, '');
+    }
+    return e.charAt(0).toUpperCase() + e.slice(1).toLowerCase();
+  });
 
   const matches = $derived.by(() => {
     const m = /^\/([\w:-]*)$/.exec(text);
@@ -115,15 +129,9 @@
     if (picked >= matches.length) picked = 0;
   });
 
-  /**
-   * Grow with content, but never trust `height: auto` alone: in a flex column that can
-   * briefly report the remaining viewport as scrollHeight and lock the box at MAX.
-   * Always collapse to MIN first, measure content, then clamp.
-   */
   function autogrow(el: HTMLTextAreaElement) {
     el.style.height = `${MIN_HEIGHT}px`;
     el.style.overflowY = 'hidden';
-    // scrollHeight after the min reset is content-only (not a prior inflated height).
     const content = el.scrollHeight;
     const next = Math.max(MIN_HEIGHT, Math.min(content, MAX_HEIGHT));
     el.style.height = `${next}px`;
@@ -131,11 +139,9 @@
   }
 
   $effect(() => {
-    // Track draft so clear-on-send / insertText re-clamp height.
     void text;
     const el = input;
     if (!el) return;
-    // Layout may still be settling right after bind:this / status re-render.
     requestAnimationFrame(() => {
       if (input === el) autogrow(el);
     });
@@ -157,7 +163,6 @@
     const snapshot = [...attachments];
     const promptText = value || (snapshot.length ? 'Please look at the attached image(s).' : '');
     try {
-      // Pure slash commands → host utility/modal path (no chat pollution).
       if (value && /^\/[\w:-]+(?:\s+\S[\s\S]*)?$/.test(value) && snapshot.length === 0) {
         send({ type: 'slashCommand', text: value });
         text = '';
@@ -167,8 +172,6 @@
         }
         return;
       }
-      // Stage each image as its own message — one big prompt+base64 postMessage is dropped
-      // silently by VS Code when the payload is large.
       const stagedIds: string[] = [];
       for (const img of snapshot) {
         const id = img.id || `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -198,7 +201,6 @@
         err instanceof Error
           ? err.message
           : 'Could not send (image may be too large). Try a smaller screenshot.';
-      // Keep attachments so the user can retry.
     } finally {
       sending = false;
     }
@@ -240,7 +242,6 @@
     for (const file of list) {
       if (attachments.length >= MAX_IMAGES) break;
       try {
-        // Compress before postMessage — large base64 payloads can silently fail IPC.
         const prepared = await prepareImage(file);
         attachments = [
           ...attachments,
@@ -253,7 +254,6 @@
           },
         ];
       } catch {
-        // Fall back to raw read if canvas compress fails (e.g. SVG).
         const data = await readAsBase64(file);
         attachments = [
           ...attachments,
@@ -282,10 +282,6 @@
     });
   }
 
-  /**
-   * Downscale large screenshots so host↔webview messages stay under VS Code IPC limits
-   * and the agent can still see the picture.
-   */
   function prepareImage(
     file: File,
   ): Promise<{ data: string; preview: string; mimeType: string; name: string }> {
@@ -310,13 +306,11 @@
             return;
           }
           ctx.drawImage(img, 0, 0, width, height);
-          // Always JPEG after resize — screenshots as PNG explode IPC size.
           const mimeType = 'image/jpeg';
           const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
           const comma = dataUrl.indexOf(',');
           const data = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
 
-          // Tiny thumb for the chat bubble after host strips full `data`.
           const pScale = Math.min(1, PREVIEW_EDGE / Math.max(width, height));
           const pw = Math.max(1, Math.round(width * pScale));
           const ph = Math.max(1, Math.round(height * pScale));
@@ -385,41 +379,47 @@
   }
 </script>
 
-<div class="composer">
+<div class="composer-container">
   {#if matches.length > 0}
-    <div class="commands">
+    <div class="autocomplete" role="listbox">
       {#each matches as command, i (command.name)}
-        <button class="command" class:picked={i === picked} onclick={() => accept(command.name)}>
-          <span class="name">/{command.name}</span>
-          {#if command.description}<span class="desc">{command.description}</span>{/if}
+        <button
+          class="autocomplete-row"
+          class:active={i === picked}
+          onclick={() => accept(command.name)}
+          role="option"
+          aria-selected={i === picked}
+        >
+          <span class="autocomplete-name">/{command.name}</span>
+          {#if command.description}<span class="autocomplete-desc">{command.description}</span>{/if}
         </button>
       {/each}
     </div>
   {/if}
 
   {#if queuedCount > 0}
-    <div class="queue">
+    <div class="queue-banner">
       <div class="queue-head">
         <span class="queue-badge">{queuedCount}</span>
         <span class="queue-title">Waiting to send</span>
-        <button class="link strong" type="button" onclick={() => onPushQueue()}>Send all now</button>
-        <button class="link" type="button" onclick={onClearQueue}>Clear</button>
+        <button class="link-btn strong" type="button" onclick={() => onPushQueue()}>Send all now</button>
+        <button class="link-btn" type="button" onclick={onClearQueue}>Clear</button>
       </div>
       <ul class="queue-list">
         {#each queuedMessages as item (item.id)}
-          <li>
+          <li class="queue-item">
             <span class="q-text" title={item.text}>{preview(item.text)}</span>
             {#if item.images?.length}
               <span class="q-meta">{item.images.length} img</span>
             {/if}
-            <button class="link strong tiny" type="button" onclick={() => onPushQueue(item.id)}>Send</button>
+            <button class="link-btn strong tiny" type="button" onclick={() => onPushQueue(item.id)}>Send</button>
           </li>
         {/each}
       </ul>
     </div>
   {/if}
 
-  <div class="box">
+  <div class="composer-card">
     {#if attachments.length > 0}
       {@const maxShow = 4}
       {@const shown = attachments.slice(0, maxShow)}
@@ -439,7 +439,6 @@
             type="button"
             title="{extra} more — click to remove the oldest hidden one"
             onclick={() => {
-              // Drop the first hidden attachment so the user can clear overflow without a full clear.
               const hidden = attachments[maxShow];
               if (hidden) removeAttachment(hidden.id);
             }}
@@ -449,235 +448,163 @@
         {/if}
       </div>
     {/if}
+
     <textarea
       bind:this={input}
       bind:value={text}
       rows="2"
+      class="textarea"
       placeholder={busy ? 'Queue a follow-up…' : 'Ask, paste a screenshot, or / for commands…'}
       onkeydown={onKeydown}
       onpaste={onPaste}
       oninput={(e) => autogrow(e.currentTarget)}
     ></textarea>
-  </div>
 
-  {#if sendError}
-    <div class="send-error" role="alert">{sendError}</div>
-  {/if}
+    {#if sendError}
+      <div class="send-error" role="alert">{sendError}</div>
+    {/if}
 
-  <div class="toolbar" class:warn={mode.tone === 'warn'} class:danger={mode.tone === 'danger'}>
-    <input
-      bind:this={fileInput}
-      type="file"
-      accept="image/*"
-      multiple
-      class="file"
-      onchange={(e) => {
-        const files = e.currentTarget.files;
-        if (files?.length) void addFiles(files);
-        e.currentTarget.value = '';
-      }}
-    />
-    <button
-      class="icon-btn"
-      type="button"
-      title="Attach image"
-      aria-label="Attach image"
-      onclick={() => fileInput?.click()}
-    >
-      <Icon name="image" size={14} />
-    </button>
-
-    <select
-      class="mode {mode.tone}"
-      title={mode.hint}
-      value={status.permissionMode}
-      onchange={(e) => onSetPermissionMode(e.currentTarget.value as PermissionMode)}
-    >
-      {#each modes as m (m.id)}
-        <option value={m.id} title={m.hint}>{optionLabel(m)}</option>
-      {/each}
-    </select>
-
-    <select
-      title="Model"
-      value={status.currentModelId ?? ''}
-      onchange={(e) => onSetModel(e.currentTarget.value)}
-      disabled={status.models.length === 0}
-    >
-      {#if status.models.length === 0}
-        <option value="">{stopped ? 'not started' : 'loading…'}</option>
-      {/if}
-      {#each status.models as m (m.modelId)}
-        <option value={m.modelId}>{m.name}</option>
-      {/each}
-    </select>
-
-    {#if efforts.length > 0}
-      <select
-        title="Reasoning effort"
-        value={status.reasoningEffort ?? ''}
-        onchange={(e) => onSetEffort(e.currentTarget.value)}
+    <div class="toolbar">
+      <input
+        bind:this={fileInput}
+        type="file"
+        accept="image/*"
+        multiple
+        class="file-input"
+        onchange={(e) => {
+          const files = e.currentTarget.files;
+          if (files?.length) void addFiles(files);
+          e.currentTarget.value = '';
+        }}
+      />
+      <button
+        class="toolbar-btn btn-attach"
+        type="button"
+        title="Attach image"
+        aria-label="Attach image"
+        onclick={() => fileInput?.click()}
       >
-        {#each efforts as effort (effort.id)}
-          <option value={effort.id} title={effort.description}>{effort.label}</option>
-        {/each}
-      </select>
-    {/if}
+        <Icon name="paperclip" size={14} />
+      </button>
 
-    <span class="spacer"></span>
+      <!-- Permission Mode Button / Select Overlay -->
+      <div class="select-wrapper mode-wrapper">
+        <div class="toolbar-btn btn-mode">
+          <span class="dot-perm {mode.dotClass}"></span>
+          <span>{mode.label}</span>
+          <span class="chevron"><Icon name="chevronDown" size={12} /></span>
+        </div>
+        <select
+          class="select-overlay"
+          title={mode.hint}
+          value={status.permissionMode}
+          onchange={(e) => onSetPermissionMode(e.currentTarget.value as PermissionMode)}
+        >
+          {#each modes as m (m.id)}
+            <option value={m.id} title={m.hint}>{optionLabel(m)}</option>
+          {/each}
+        </select>
+      </div>
 
-    {#if stopped}
-      <button class="restart" type="button" title="Restart the agent" onclick={onRestart}>Restart</button>
-    {/if}
-    {#if busy}
-      <button class="stop" type="button" onclick={onCancel} title="Stop the current turn (Esc)">Stop</button>
-    {/if}
-    <button class="send" type="button" onclick={() => void submit()} disabled={!canSubmit}>
-      {sending ? 'Sending…' : busy ? 'Queue' : stopped ? 'Start' : 'Send'}
-    </button>
+      <!-- Model Select Button / Select Overlay -->
+      <div class="select-wrapper model-wrapper">
+        <div class="toolbar-btn btn-model">
+          <span class="model-name">{model?.name ?? (stopped ? 'not started' : 'loading…')}</span>
+          <span class="chevron"><Icon name="chevronDown" size={12} /></span>
+        </div>
+        <select
+          class="select-overlay"
+          title="Model"
+          value={status.currentModelId ?? ''}
+          onchange={(e) => onSetModel(e.currentTarget.value)}
+          disabled={status.models.length === 0}
+        >
+          {#if status.models.length === 0}
+            <option value="">{stopped ? 'not started' : 'loading…'}</option>
+          {/if}
+          {#each status.models as m (m.modelId)}
+            <option value={m.modelId}>{m.name}</option>
+          {/each}
+        </select>
+      </div>
+
+      <!-- Reasoning Effort Button / Select Overlay -->
+      {#if efforts.length > 0}
+        <div class="select-wrapper effort-wrapper">
+          <div class="toolbar-btn btn-effort">
+            <span>{currentEffortLabel}</span>
+            <span class="chevron"><Icon name="chevronDown" size={12} /></span>
+          </div>
+          <select
+            class="select-overlay"
+            title="Reasoning effort"
+            value={status.reasoningEffort ?? ''}
+            onchange={(e) => onSetEffort(e.currentTarget.value)}
+          >
+            {#each efforts as effort (effort.id)}
+              <option value={effort.id} title={effort.description}>{effort.label}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
+
+      <div class="spacer"></div>
+
+      {#if stopped}
+        <button class="toolbar-btn btn-restart" type="button" title="Restart the agent" onclick={onRestart}>Restart</button>
+      {/if}
+      {#if busy}
+        <button class="toolbar-btn btn-stop" type="button" onclick={onCancel} title="Stop the current turn (Esc)">Stop</button>
+      {/if}
+      <button class="btn-primary" type="button" onclick={() => void submit()} disabled={!canSubmit}>
+        {sending ? 'Sending…' : busy ? 'Queue' : stopped ? 'Start' : 'Send'}
+      </button>
+    </div>
   </div>
 </div>
 
 <style>
-  .composer {
+  .composer-container {
     flex: 0 0 auto;
-    padding: 8px 12px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    margin: 0 12px 12px 12px;
+    position: relative;
+    container-type: inline-size;
   }
 
-  .commands {
+  .composer-card {
+    background-color: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2);
     display: flex;
     flex-direction: column;
-    max-height: 150px;
-    overflow-y: auto;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    background: var(--gb-surface);
+    gap: var(--space-2);
+    position: relative;
   }
 
-  .command {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    text-align: left;
-    padding: 7px 10px;
+  .composer-card:focus-within {
+    border-color: var(--focus);
+    outline: 1px solid var(--focus);
+    outline-offset: 0;
+  }
+
+  .textarea {
+    width: 100%;
+    min-height: 40px;
+    max-height: 220px;
+    background: transparent;
     border: none;
-    border-bottom: 1px solid var(--gb-rule);
-    background: none;
-    color: var(--vscode-foreground);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13.5px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    padding: 0;
   }
 
-  .command:last-child {
-    border-bottom: none;
-  }
-
-  .command.picked,
-  .command:hover {
-    background: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
-  }
-
-  .name {
-    font-family: var(--gb-mono);
-    font-weight: 700;
-    color: var(--gb-accent);
-    flex: 0 0 auto;
-  }
-
-  .command.picked .name {
-    color: inherit;
-  }
-
-  .desc {
-    flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--gb-dim);
-  }
-
-  .queue {
-    border: 1px solid color-mix(in srgb, var(--gb-warn) 55%, var(--gb-rule));
-    border-left: 3px solid var(--gb-warn);
-    border-radius: var(--gb-radius);
-    background: color-mix(in srgb, var(--gb-warn) 12%, var(--vscode-editor-background));
-    overflow: hidden;
-  }
-
-  .queue-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-bottom: 1px solid color-mix(in srgb, var(--gb-warn) 30%, transparent);
-  }
-
-  .queue-badge {
-    flex: 0 0 auto;
-    min-width: 1.4em;
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: var(--gb-warn);
-    color: var(--vscode-editor-background);
-    font-family: var(--gb-mono);
-    font-weight: 800;
-    font-size: 11px;
-    text-align: center;
-  }
-
-  .queue-title {
-    flex: 1 1 auto;
-    font-size: var(--gb-meta-size);
-    font-weight: 700;
-  }
-
-  .queue-list {
-    list-style: none;
-    margin: 0;
-    padding: 4px 0;
-    max-height: 9em;
-    overflow: auto;
-  }
-
-  .queue-list li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-    font-size: 12px;
-  }
-
-  .q-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .q-meta {
-    flex: 0 0 auto;
-    color: var(--gb-dim);
-    font-size: 11px;
-  }
-
-  .box {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    border: 1px solid var(--vscode-input-border, var(--gb-rule));
-    border-radius: var(--gb-radius-lg);
-    background: var(--vscode-input-background);
-    padding: 10px 12px;
-  }
-
-  .box:focus-within {
-    border-color: var(--vscode-focusBorder);
+  .textarea::placeholder {
+    color: var(--text-faint);
   }
 
   .thumbs {
@@ -691,10 +618,10 @@
     position: relative;
     width: 36px;
     height: 36px;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     overflow: hidden;
-    background: var(--gb-surface-sunken);
+    background-color: var(--bg-inset);
     flex: 0 0 auto;
   }
 
@@ -709,19 +636,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px dashed var(--gb-rule);
-    background: color-mix(in srgb, var(--gb-accent) 10%, var(--gb-surface-sunken));
-    color: var(--gb-dim);
+    border: 1px dashed var(--border-strong);
+    background-color: var(--bg-inset);
+    color: var(--text-muted);
     font: inherit;
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     padding: 0;
   }
 
   .thumb.more:hover {
-    color: var(--vscode-foreground);
-    border-color: var(--gb-accent);
+    color: var(--text);
+    border-color: var(--accent);
   }
 
   .rm {
@@ -731,183 +658,330 @@
     display: flex;
     padding: 0;
     border: none;
-    background: color-mix(in srgb, var(--vscode-editor-background) 85%, transparent);
-    color: var(--vscode-foreground);
+    background: var(--bg);
+    color: var(--text);
     cursor: pointer;
     line-height: 1;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-standard);
   }
 
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    min-height: 39px; /* 2 × 13px × 1.5 */
-    height: 39px;
-    resize: none;
-    overflow-y: hidden;
-    max-height: 220px;
-    border: none;
-    background: none;
-    color: var(--vscode-input-foreground);
-    font: inherit;
-    font-size: 13px;
-    line-height: 1.5;
-    padding: 0;
-  }
-
-  textarea:focus {
-    outline: none;
+  .thumb:hover .rm,
+  .rm:focus-visible {
+    opacity: 1;
   }
 
   .send-error {
-    padding: 5px 8px;
-    border-left: 3px solid var(--gb-danger);
-    background: color-mix(in srgb, var(--gb-danger) 12%, transparent);
-    color: var(--gb-danger);
-    font-size: 11px;
+    font-size: 11.5px;
+    color: var(--danger);
+    padding: 2px 0;
   }
 
-  .file {
+  .file-input {
     display: none;
   }
 
-  /* First control on the picker row — same height as the selects. */
-  .icon-btn {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--vscode-dropdown-border, var(--gb-rule));
-    border-radius: var(--gb-radius-sm);
-    background: var(--vscode-dropdown-background);
-    color: var(--gb-dim);
-    cursor: pointer;
-  }
-
-  .icon-btn:hover {
-    color: var(--vscode-foreground);
-    border-color: var(--vscode-focusBorder, var(--gb-accent));
-  }
-
-  /* Permission + model + effort + Send on one row under the text box. */
+  /* Toolbar */
   .toolbar {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    row-gap: 6px;
-    padding: 4px 0 0;
-    border-top: 1px solid var(--gb-rule);
-    padding-top: 10px;
-  }
-
-  .toolbar.warn {
-    border-top-color: var(--gb-warn);
-  }
-
-  .toolbar.danger {
-    border-top-color: var(--gb-danger);
+    gap: 4px;
+    flex-wrap: nowrap;
+    width: 100%;
   }
 
   .spacer {
     flex: 1 1 auto;
   }
 
-  select {
-    max-width: 10.5em;
+  .select-wrapper {
+    display: inline-flex;
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  .model-wrapper {
     min-width: 0;
-    appearance: none;
-    background: var(--vscode-dropdown-background);
-    color: var(--vscode-dropdown-foreground);
-    border: 1px solid var(--vscode-dropdown-border, var(--gb-rule));
-    border-radius: var(--gb-radius-sm);
-    font: inherit;
-    font-size: var(--gb-kicker-size);
-    font-weight: 700;
-    padding: 5px 9px;
+    flex: 0 1 auto;
+  }
+
+  .select-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
     cursor: pointer;
-  }
-
-  select:disabled {
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  select.mode.plan {
-    color: var(--gb-plan);
-    border-color: var(--gb-plan);
-  }
-
-  select.mode.warn {
-    color: var(--gb-warn);
-    border-color: var(--gb-warn);
-    background: color-mix(in srgb, var(--gb-warn) 14%, var(--vscode-dropdown-background));
-  }
-
-  select.mode.danger {
-    color: var(--gb-danger);
-    border-color: var(--gb-danger);
-    background: color-mix(in srgb, var(--gb-danger) 16%, var(--vscode-dropdown-background));
-  }
-
-  button.send,
-  button.stop,
-  button.restart {
-    padding: 5px 14px;
-    border: 1px solid transparent;
-    border-radius: var(--gb-radius-sm);
-    font: inherit;
     font-size: 12px;
-    font-weight: 800;
+  }
+
+  .toolbar-btn {
+    height: 22px;
+    padding: 0 6px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     cursor: pointer;
+    white-space: nowrap;
+    flex: 0 0 auto;
   }
 
-  button.send {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+  .btn-attach {
+    width: 24px;
+    height: 22px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 24px;
   }
 
-  button.send:disabled {
+  .btn-model {
+    min-width: 0;
+    width: 100%;
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+
+  .model-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .toolbar-btn:hover,
+  .select-wrapper:hover .toolbar-btn,
+  .select-wrapper:focus-within .toolbar-btn {
+    background-color: var(--bg-hover);
+    color: var(--text);
+  }
+
+  .select-wrapper:focus-within .toolbar-btn,
+  .toolbar-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .chevron {
+    opacity: 0;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: opacity var(--dur-fast) var(--ease-standard);
+  }
+
+  .toolbar-btn:hover .chevron,
+  .select-wrapper:hover .chevron,
+  .select-wrapper:focus-within .chevron {
+    opacity: 1;
+  }
+
+  .dot-perm {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-perm.ask { background-color: var(--text-muted); }
+  .dot-perm.accept { background-color: var(--accent); }
+  .dot-perm.plan { background-color: var(--accent); }
+  .dot-perm.bypass { background-color: var(--danger); }
+
+  .btn-stop {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .btn-restart {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  .btn-primary {
+    background-color: var(--accent);
+    color: var(--accent-fg);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0 12px;
+    height: 22px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-standard);
+    flex: 0 0 auto;
+  }
+
+  .btn-primary:hover {
+    background-color: var(--accent-hover);
+  }
+
+  .btn-primary:disabled {
     opacity: 0.5;
     cursor: default;
   }
 
-  button.stop {
-    background: none;
-    border-color: var(--gb-warn);
-    color: var(--gb-warn);
+  .btn-primary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 
-  button.restart {
-    background: var(--vscode-button-secondaryBackground, transparent);
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-    border-color: var(--gb-rule);
+  /* Responsive floor rules below 320px */
+  @container (max-width: 320px) {
+    .effort-wrapper {
+      display: none !important;
+    }
   }
 
-  button.link {
-    flex: 0 0 auto;
-    border: none;
-    background: none;
-    padding: 0;
-    font: inherit;
+  @media (max-width: 320px) {
+    .effort-wrapper {
+      display: none;
+    }
+  }
+
+  /* Queue Banner */
+  .queue-banner {
+    border-left: 2px solid var(--warning);
+    padding: 6px var(--space-3);
+    font-size: 12px;
+    color: var(--text-muted);
+    background-color: var(--bg-raised);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-2);
+  }
+
+  .queue-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .queue-badge {
+    min-width: 1.4em;
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    background-color: var(--warning);
+    color: var(--bg);
+    font-family: var(--font-mono);
+    font-weight: 600;
     font-size: 11px;
-    font-weight: 700;
-    text-decoration: underline;
-    color: var(--gb-accent);
+    text-align: center;
+  }
+
+  .queue-title {
+    flex: 1 1 auto;
+    font-weight: 600;
+  }
+
+  .queue-list {
+    list-style: none;
+    margin: 4px 0 0 0;
+    padding: 0;
+    max-height: 9em;
+    overflow-y: auto;
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 4px 0;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .q-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .q-meta {
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .link-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+  }
+
+  .link-btn:hover {
+    color: var(--text);
+    background-color: var(--bg-hover);
+  }
+
+  .link-btn.strong {
+    color: var(--accent);
+  }
+
+  .link-btn.tiny {
+    font-size: 11px;
+  }
+
+  /* Autocomplete Popup */
+  .autocomplete {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: var(--space-2);
+    background-color: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
+    overflow: hidden;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 50;
+  }
+
+  .autocomplete-row {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    border: none;
+    background: transparent;
+    text-align: left;
     cursor: pointer;
   }
 
-  button.link.strong {
-    text-decoration: none;
-    padding: 2px 8px;
-    border: 1px solid var(--gb-accent);
-    background: color-mix(in srgb, var(--gb-accent) 16%, transparent);
+  .autocomplete-row:hover,
+  .autocomplete-row.active {
+    background-color: var(--accent-subtle);
+    border-left: 2px solid var(--accent);
   }
 
-  button.link.tiny {
-    padding: 1px 6px;
-    font-size: 10px;
+  .autocomplete-name {
+    font-family: var(--font-mono);
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .autocomplete-desc {
+    color: var(--text-muted);
   }
 </style>

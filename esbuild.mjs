@@ -62,6 +62,9 @@ const webviewConfig = {
   mainFields: ['svelte', 'browser', 'module', 'main'],
   conditions: ['svelte', 'browser'],
   metafile: true,
+  // Plain CSS (tokens/base) emits dist/webview.css; woff2 lands in dist/fonts/.
+  loader: { '.woff2': 'copy' },
+  assetNames: 'fonts/[name]',
   plugins: [
     esbuildSvelte({
       preprocess: svelteConfig.preprocess,

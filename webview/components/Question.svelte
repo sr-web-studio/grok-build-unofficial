@@ -12,10 +12,6 @@
   const questions = $derived(block.questions);
   const total = $derived(questions.length);
 
-  /**
-   * One question at a time. Grok asks up to four at once and stacking them turned the card into a
-   * full screen of scrolling; a stepper keeps it the size of a single prompt.
-   */
   let step = $state(0);
   let picks = $state<Record<number, string[]>>({});
   let notes = $state<Record<number, string>>({});
@@ -25,7 +21,6 @@
   const current = $derived(questions[Math.min(step, Math.max(total - 1, 0))]);
   const chosen = $derived(picks[step] ?? []);
 
-  /** Answered means picked something, or typed an answer into "Other". */
   function isAnswered(index: number): boolean {
     return (picks[index]?.length ?? 0) > 0 || (notes[index] ?? '').trim().length > 0;
   }
@@ -40,8 +35,6 @@
       picks[step] = list.includes(label) ? list.filter((l) => l !== label) : [...list, label];
     } else {
       picks[step] = list.includes(label) ? [] : [label];
-      // A single-select pick is a complete answer, so step forward rather than making the user
-      // hunt for Next — the same rhythm as clicking through a wizard.
       if (picks[step].length > 0 && !onLast) step += 1;
     }
   }
@@ -51,7 +44,6 @@
     if (otherOpen[step]) queueMicrotask(() => otherInput?.focus());
   }
 
-  /** The preview of the selected option, which grok echoes back so it knows what the user saw. */
   const selectedPreview = $derived(
     current?.multiSelect ? undefined : current?.options.find((o) => chosen.includes(o.label))?.preview,
   );
@@ -63,7 +55,6 @@
     questions.forEach((q, i) => {
       const list = [...(picks[i] ?? [])];
       const extra = (notes[i] ?? '').trim();
-      // With nothing picked, the typed text *is* the answer ("Other"); alongside picks it is a note.
       if (list.length === 0 && extra) list.push(extra);
       answers[q.question] = q.multiSelect ? list : (list[0] ?? '');
 
@@ -80,11 +71,13 @@
   }
 </script>
 
-<div class="qa" class:answered={block.answered}>
-  <div class="bar">
-    <span class="mark"><Icon name="sparkles" size={13} /></span>
-    <span class="kicker gb-kicker">{current?.header || 'Grok asks'}</span>
+<div class="gb-question-card" class:answered={block.answered}>
+  <div class="gb-wizard-header">
+    <span>Question {step + 1} of {total}{current?.multiSelect ? ' (Multi-Select)' : ''}</span>
     {#if total > 1}
+      <div class="gb-wizard-meter">
+        <div class="gb-wizard-fill" style="width: {((step + 1) / total) * 100}%;"></div>
+      </div>
       <span class="dots" role="tablist" aria-label="Questions">
         {#each questions as _q, i (i)}
           <button
@@ -100,43 +93,61 @@
         {/each}
       </span>
     {/if}
-    {#if block.answered}<span class="verdict gb-meta">Answered</span>{/if}
+    {#if block.answered}
+      <span class="gb-verdict-line">Answered</span>
+    {/if}
   </div>
 
   {#if block.answered}
-    <div class="text">{current?.question}</div>
-    <div class="hint gb-meta">
+    <div class="gb-question-title">{current?.question}</div>
+    <div class="gb-hint">
       {block.response?.outcome === 'skip_interview' ? 'Skipped — Grok continued on its own.' : 'Sent to Grok.'}
     </div>
   {:else if current}
-    <div class="text">{current.question}</div>
+    <div class="gb-question-title">{current.question}</div>
 
-    <div class="options" role={current.multiSelect ? 'group' : 'radiogroup'}>
+    <div class="gb-option-list" role={current.multiSelect ? 'group' : 'radiogroup'}>
       {#each current.options as option, oi (oi)}
         {@const on = chosen.includes(option.label)}
         <button
-          class="option"
-          class:picked={on}
+          class="gb-option-row"
+          class:selected={on}
           role={current.multiSelect ? 'checkbox' : 'radio'}
           aria-checked={on}
           title={option.description}
           onclick={() => toggle(option.label)}
         >
-          <span class="box" class:multi={current.multiSelect} class:on>
-            {#if on && current.multiSelect}<Icon name="check" size={10} />{/if}
-          </span>
-          <span class="body">
-            <span class="label">{option.label}</span>
-            {#if option.description}<span class="desc">{option.description}</span>{/if}
-          </span>
+          {#if current.multiSelect}
+            <div class="gb-checkbox" class:selected={on}>
+              {#if on}<Icon name="check" size={10} />{/if}
+            </div>
+          {:else}
+            <div class="gb-radio" class:selected={on}></div>
+          {/if}
+          <div class="gb-option-body">
+            <span class="gb-option-label">{option.label}</span>
+            {#if option.description}<span class="gb-option-desc">{option.description}</span>{/if}
+          </div>
         </button>
       {/each}
 
-      <button class="option other" class:picked={otherOpen[step]} onclick={openOther}>
-        <span class="box" class:multi={current.multiSelect} class:on={otherOpen[step]}>
-          {#if otherOpen[step] && current.multiSelect}<Icon name="check" size={10} />{/if}
-        </span>
-        <span class="body"><span class="label">Other…</span></span>
+      <button
+        class="gb-option-row gb-option-other"
+        class:selected={otherOpen[step]}
+        role={current.multiSelect ? 'checkbox' : 'radio'}
+        aria-checked={otherOpen[step]}
+        onclick={openOther}
+      >
+        {#if current.multiSelect}
+          <div class="gb-checkbox" class:selected={otherOpen[step]}>
+            {#if otherOpen[step]}<Icon name="check" size={10} />{/if}
+          </div>
+        {:else}
+          <div class="gb-radio" class:selected={otherOpen[step]}></div>
+        {/if}
+        <div class="gb-option-body">
+          <span class="gb-option-label">Other…</span>
+        </div>
       </button>
     </div>
 
@@ -144,6 +155,7 @@
       <input
         bind:this={otherInput}
         type="text"
+        class="gb-question-input"
         bind:value={notes[step]}
         placeholder={chosen.length > 0 ? 'Add a note…' : 'Type your own answer…'}
         onkeydown={(e) => {
@@ -153,64 +165,64 @@
     {/if}
 
     {#if selectedPreview}
-      <pre class="preview">{selectedPreview}</pre>
+      <pre class="gb-preview-box">{selectedPreview}</pre>
     {/if}
 
-    <div class="actions">
-      {#if step > 0}
-        <button class="gb-btn ghost" onclick={() => (step -= 1)}>Back</button>
-      {/if}
-      {#if !onLast}
-        <button class="gb-btn primary" disabled={!canAdvance} onclick={() => (step += 1)}>Next</button>
-      {/if}
-      <button class="gb-btn" class:primary={onLast} disabled={!complete} onclick={submit}>Send</button>
-      <span class="spacer"></span>
-      <button class="gb-btn ghost" title="Let Grok continue without answers" onclick={skip}>Skip</button>
+    <div class="gb-action-group">
+      <button class="gb-btn-ghost" title="Let Grok continue without answers" onclick={skip}>Skip</button>
+      <div class="gb-right-actions">
+        {#if step > 0}
+          <button class="gb-btn-secondary" onclick={() => (step -= 1)}>Back</button>
+        {/if}
+        {#if !onLast}
+          <button class="gb-btn-primary" disabled={!canAdvance} onclick={() => (step += 1)}>Next</button>
+        {/if}
+        {#if onLast}
+          <button class="gb-btn-primary" disabled={!complete} onclick={submit}>Submit</button>
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
 
 <style>
-  .qa {
+  /* Question Card Wizard (Level 1 — Raised, no 2px purple frame) */
+  .gb-question-card {
+    background-color: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 8px 9px;
-    border: 2px solid var(--gb-think);
-    border-radius: var(--gb-radius);
-    background: color-mix(in srgb, var(--gb-think) 8%, var(--gb-surface));
+    gap: var(--space-3);
   }
 
-  .qa.answered {
-    border-color: var(--gb-rule);
-    background: var(--gb-surface);
-    opacity: 0.8;
+  .gb-question-card.answered {
+    opacity: 1;
   }
 
-  .bar {
+  .gb-wizard-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
+    font-size: 11.5px;
+    color: var(--text-muted);
   }
 
-  .mark {
-    display: flex;
-    color: var(--gb-think);
-  }
-
-  .kicker {
-    flex: 1 1 auto;
-    color: var(--gb-dim);
+  .gb-wizard-meter {
+    flex: 1;
+    height: 2px;
+    background-color: var(--border);
+    margin: 0 var(--space-3);
+    border-radius: var(--radius-full);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .verdict {
-    flex: 0 0 auto;
+  .gb-wizard-fill {
+    height: 100%;
+    background-color: var(--accent);
   }
 
-  /* Progress reads as a row of ticks rather than "Question 2 of 4" — it costs one line less. */
   .dots {
     display: flex;
     gap: 3px;
@@ -222,182 +234,189 @@
     height: 3px;
     padding: 0;
     border: none;
-    background: var(--gb-rule-strong);
+    border-radius: var(--radius-full);
+    background: var(--border-strong);
     cursor: pointer;
   }
 
   .dot.done {
-    background: var(--gb-think);
+    background: var(--text-muted);
   }
 
   .dot.on {
-    background: var(--gb-accent);
+    background: var(--accent);
   }
 
-  .text {
-    font-weight: 600;
-    font-size: 12.5px;
+  .gb-verdict-line {
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .gb-question-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text);
     line-height: 1.4;
   }
 
-  .options {
+  .gb-option-list {
     display: flex;
     flex-direction: column;
+    gap: var(--space-2);
   }
 
-  .option {
+  .gb-option-row {
     display: flex;
-    align-items: baseline;
-    gap: 7px;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background-color: var(--bg);
+    cursor: pointer;
+    user-select: none;
     text-align: left;
     width: 100%;
-    padding: 4px 7px;
-    border: 1px solid var(--gb-rule);
-    border-bottom: none;
-    border-radius: var(--gb-radius);
-    background: none;
-    color: var(--vscode-foreground);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
+    font-family: var(--font-ui);
+    transition: background-color var(--dur-fast) var(--ease-standard);
   }
 
-  .option:last-child {
-    border-bottom: 1px solid var(--gb-rule);
+  .gb-option-row:hover {
+    background-color: var(--bg-hover);
   }
 
-  .option:hover {
-    background: var(--vscode-list-hoverBackground);
+  .gb-option-row.selected {
+    background-color: var(--accent-subtle);
+    border-color: var(--accent);
   }
 
-  .option.picked {
-    background: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
+  /* List row focus treatment (§1): --bg-hover background + 2px --focus left edge, no ring */
+  .gb-option-row:focus-visible {
+    outline: none;
+    background-color: var(--bg-hover);
+    border-left: 2px solid var(--focus);
   }
 
-  /*
-   * The control has to look like a control *before* it is clicked. An unfilled hairline square on
-   * the card's own background read as decoration, so it borrows the theme's checkbox border and
-   * fill — and the shape carries the mode: a square is pick-many, a circle is pick-one.
-   */
-  /*
-   * The ring is drawn from the text colour, not from `--vscode-checkbox-border`. That token is
-   * near-invisible in the default dark theme, which is what made these read as bullets rather
-   * than as something to click.
-   */
-  .box {
-    flex: 0 0 auto;
+  .gb-radio,
+  .gb-checkbox {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 14px;
-    align-self: center;
-    border: 1px solid color-mix(in srgb, var(--vscode-foreground) 55%, transparent);
-    background: var(--vscode-checkbox-background, var(--vscode-input-background));
-    color: var(--vscode-checkbox-foreground, var(--vscode-foreground));
+    flex-shrink: 0;
   }
 
-  .box:not(.multi) {
-    border-radius: 50%;
+  .gb-checkbox {
+    border-radius: var(--radius-sm);
   }
 
-  .box.on {
-    border-color: var(--gb-accent);
-    background: var(--gb-accent);
-    color: var(--vscode-button-foreground, var(--vscode-editor-background));
+  .gb-radio.selected {
+    border-color: var(--accent);
   }
 
-  /* Single-select fills with a dot rather than a tick — the usual radio reading. */
-  .box:not(.multi).on::after {
+  .gb-radio.selected::after {
     content: '';
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: currentColor;
+    background-color: var(--accent);
   }
 
-  .option:hover .box {
-    border-color: var(--gb-accent);
+  .gb-checkbox.selected {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
   }
 
-  .body {
+  /*
+   * Label above description, both allowed to wrap. Side by side they fit only the widest
+   * sidebar: at 380px the description was ellipsised away, and the description is what the
+   * choice is actually made on.
+   */
+  .gb-option-body {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
-    align-items: baseline;
-    gap: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
 
-  .label {
-    flex: 0 1 auto;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .gb-option-label {
+    font-size: 12.5px;
+    color: var(--text);
+    font-weight: 500;
   }
 
-  /* The description rides on the same line and truncates; the full text is in the tooltip. */
-  .desc {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: var(--gb-meta-size);
+  .gb-option-desc {
+    font-size: 11.5px;
+    color: var(--text-muted);
     font-weight: 400;
-    color: var(--gb-dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 
-  .option.picked .desc {
-    color: inherit;
-    opacity: 0.85;
-  }
-
-  .other .label {
-    color: var(--gb-dim);
-  }
-
-  .option.other.picked .label {
-    color: inherit;
-  }
-
-  input {
+  /* Inputs (§1 focus rule): border to --focus at 1px + single outline offset 0. No double ring. */
+  .gb-question-input {
     width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    margin-top: 4px;
     box-sizing: border-box;
-    padding: 4px 7px;
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border, var(--gb-rule));
-    border-radius: var(--gb-radius);
-    font: inherit;
-    font-size: 12px;
   }
 
-  .preview {
+  .gb-question-input:focus-visible {
+    border-color: var(--focus);
+    outline: 1px solid var(--focus);
+    outline-offset: 0;
+  }
+
+  .gb-preview-box {
     margin: 0;
     max-height: 140px;
     overflow: auto;
-    padding: 6px 8px;
-    background: var(--gb-surface-sunken);
-    border-radius: var(--gb-radius);
-    font-family: var(--gb-mono);
-    font-size: 11px;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-inset);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: 12px;
     line-height: 1.5;
     white-space: pre-wrap;
+    color: var(--text);
   }
 
-  .actions {
+  .gb-action-group {
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: space-between;
+    gap: var(--space-2);
+    flex-wrap: wrap;
   }
 
-  .spacer {
-    flex: 1 1 auto;
+  .gb-right-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
-  .hint {
-    color: var(--gb-dim);
+
+
+
+
+
+
+
+
+  .gb-hint {
+    font-size: 11.5px;
+    color: var(--text-muted);
   }
 </style>

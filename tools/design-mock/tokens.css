@@ -1,0 +1,83 @@
+/* tokens.css - Design System Tokens for Grok Build UI */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root, [data-theme="dark"] {
+  --bg: #0A0A0A;
+  --bg-raised: #141414;
+  --bg-inset: #1C1C1C;
+  --bg-hover: #1F1F1F;
+  --bg-active: #262626;
+  --border: #242424;
+  --border-strong: #333333;
+  --text: #F5F5F5;
+  --text-muted: #A1A1A1;
+  --text-faint: #6E6E6E;
+
+  --accent: #1D9BF0;
+  --accent-fg: #FFFFFF;
+  --focus: #5A9FD4;
+  --accent-hover: #4AB0F5;
+  --accent-subtle: #0E2A3D;
+  --success: #3FB950;
+  --warning: #D29922;
+  --danger: #F85149;
+
+  --diff-add-bg: #0D2B18;
+  --diff-add-text: #57D174;
+  --diff-del-bg: #33151A;
+  --diff-del-text: #F08C8C;
+
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="light"] {
+  --bg: #FFFFFF;
+  --bg-raised: #F7F7F7;
+  --bg-inset: #F0F0F0;
+  --bg-hover: #EDEDED;
+  --bg-active: #E4E4E4;
+  --border: #E6E6E6;
+  --border-strong: #D2D2D2;
+  --text: #111111;
+  --text-muted: #5C5C5C;
+  --text-faint: #8A8A8A;
+
+  --accent: #0B7FD4;
+  --accent-fg: #FFFFFF;
+  --focus: #2E7CB8;
+  --accent-hover: #0969B0;
+  --accent-subtle: #E4F2FC;
+  --success: #1A7F37;
+  --warning: #9A6700;
+  --danger: #CF222E;
+
+  --diff-add-bg: #E6FFEC;
+  --diff-add-text: #116329;
+  --diff-del-bg: #FFEBE9;
+  --diff-del-text: #A40E26;
+
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root {
+  --font-ui: 'Inter', "Segoe UI", system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', var(--vscode-editor-font-family), ui-monospace, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 999px;
+
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --ease-standard: cubic-bezier(.2, 0, .2, 1);
+}

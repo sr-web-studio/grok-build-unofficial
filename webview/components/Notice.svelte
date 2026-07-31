@@ -20,92 +20,123 @@
 </script>
 
 {#if block.level === 'error'}
-  <div class="card">
-    <span class="mark"><Icon name="info" size={15} /></span>
-    <div class="col">
-      <div class="title">{title}</div>
-      {#if detail}<div class="detail">{detail}</div>{/if}
-      <div>
-        <button class="link" onclick={onShowLog}>View log</button>
-      </div>
+  <div class="card-error" role="region" aria-label="Error notice">
+    <div class="card-header">
+      <span class="mark-error"><Icon name="info" size={15} /></span>
+      <span class="title">{title}</span>
+    </div>
+    {#if detail}
+      <div class="detail">{detail}</div>
+    {/if}
+    <div class="actions">
+      <button class="btn-log" onclick={onShowLog}>View log</button>
     </div>
   </div>
 {:else}
   <div class="notice {block.level}">
-    <span class="mark">
+    <span class="mark" class:warn={block.level === 'warn'}>
       <Icon name={block.level === 'warn' ? 'warning' : 'info'} size={13} />
     </span>
     <span class="text">{block.text}</span>
     {#if block.level === 'warn'}
-      <button class="link" onclick={onShowLog}>log</button>
+      <button class="link-log" onclick={onShowLog}>log</button>
     {/if}
   </div>
 {/if}
 
 <style>
-  .card {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 12px 14px;
-    border: 1px solid var(--gb-danger);
-    border-radius: var(--gb-radius);
-    background: color-mix(in srgb, var(--gb-danger) 12%, var(--gb-surface));
-  }
-
-  .col {
+  .card-error {
+    background-color: var(--bg-raised);
+    border-left: 2px solid var(--danger);
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-    flex: 1 1 auto;
+    gap: var(--space-2);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .mark-error {
+    color: var(--danger);
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
   }
 
   .title {
-    font-weight: 800;
+    font-weight: 600;
     font-size: 12.5px;
+    color: var(--text);
     overflow-wrap: anywhere;
   }
 
   .detail {
-    font-family: var(--gb-mono);
-    font-size: var(--gb-meta-size);
-    color: var(--gb-dim);
+    background-color: var(--bg-inset);
+    border-radius: var(--radius-md);
+    padding: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--danger);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: 2px;
+  }
+
+  .btn-log {
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+
+  .btn-log:hover {
+    color: var(--text);
+    background-color: var(--bg-hover);
+  }
+
+  .btn-log:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 
   .notice {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: var(--gb-radius);
-    font-size: 0.92em;
-    background: var(--gb-surface);
-    border: 1px solid var(--gb-rule);
-    line-height: 1.45;
-  }
-
-  .notice.warn {
-    border-color: var(--gb-warn);
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+    gap: var(--space-2);
   }
 
   .mark {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    color: var(--gb-dim);
+    color: var(--text-faint);
   }
 
-  .notice.warn .mark {
-    color: var(--gb-warn);
-  }
-
-  .card .mark {
-    color: var(--gb-danger);
-    /* Nudge onto the title's cap height rather than its line box. */
-    padding-top: 1px;
+  .mark.warn {
+    color: var(--warning);
   }
 
   .text {
@@ -114,17 +145,23 @@
     white-space: pre-wrap;
   }
 
-  .link {
+  .link-log {
     flex: 0 0 auto;
     border: none;
-    border-radius: var(--gb-radius);
     background: none;
-    color: var(--gb-accent);
+    color: var(--accent);
     font: inherit;
-    font-size: 0.9em;
-    font-weight: 700;
-    text-decoration: underline;
+    font-size: 11.5px;
     cursor: pointer;
     padding: 0;
+  }
+
+  .link-log:hover {
+    text-decoration: underline;
+  }
+
+  .link-log:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 </style>

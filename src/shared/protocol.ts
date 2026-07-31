@@ -390,11 +390,15 @@ export type HostMessage =
   | { type: 'focusInput' }
   /** Slash / utility command finished — show in a modal, not as chat bubbles. */
   | { type: 'commandResult'; result: CommandResult }
+  /** Resolved webview palette (`followVsCode` is already resolved on the host). */
+  | { type: 'theme'; theme: 'dark' | 'light' }
 
 // ---------------------------------------------------------------- webview → host
 
 export type WebviewMessage =
   | { type: 'ready' }
+  /** Persist an explicit dark/light choice to `grokBuild.theme` (never `followVsCode`). */
+  | { type: 'setTheme'; theme: 'dark' | 'light' }
   /**
    * Upload one image before prompt. Prefer this over inlining base64 on `prompt` — large
    * postMessage payloads are dropped silently by VS Code.

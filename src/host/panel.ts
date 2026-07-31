@@ -23,6 +23,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined
   private readonly queued: HostMessage[] = []
   private ready = false
+  private readonly disposables: vscode.Disposable[] = []
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -33,6 +34,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
     this.ready = false
+    for (const d of this.disposables.splice(0)) d.dispose()
 
     view.webview.options = {
       enableScripts: true,
@@ -52,7 +54,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     view.onDidDispose(() => {
       this.view = undefined
       this.ready = false
+      for (const d of this.disposables.splice(0)) d.dispose()
     })
+
+    // Theme: push resolved palette, and re-resolve when the setting or VS Code theme kind changes.
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('grokBuild.theme')) this.pushTheme()
+      }),
+      vscode.window.onDidChangeActiveColorTheme(() => {
+        const setting = vscode.workspace
+          .getConfiguration('grokBuild')
+          .get<string>('theme', 'dark')
+        if (setting === 'followVsCode') this.pushTheme()
+      }),
+    )
 
     // Start the agent as soon as the panel exists, rather than waiting for the first prompt.
     // Until session/new answers there is no model list, no reasoning efforts and no cwd, so an
@@ -60,6 +76,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // update raised here is queued until the frame reports `ready`, so nothing is lost by racing
     // the webview. Failures are already surfaced in the transcript by GrokSession.start().
     void this.session.ensureStarted().catch(() => undefined)
+  }
+
+  /** Resolve `grokBuild.theme` to a concrete dark/light palette (never samples VS Code colours). */
+  private resolveTheme(): 'dark' | 'light' {
+    const setting = vscode.workspace
+      .getConfiguration('grokBuild')
+      .get<'dark' | 'light' | 'followVsCode'>('theme', 'dark')
+    if (setting === 'dark' || setting === 'light') return setting
+    const kind = vscode.window.activeColorTheme.kind
+    if (
+      kind === vscode.ColorThemeKind.Light ||
+      kind === vscode.ColorThemeKind.HighContrastLight
+    ) {
+      return 'light'
+    }
+    // Dark + high-contrast dark map to our dark palette (spec §6).
+    return 'dark'
+  }
+
+  private pushTheme(): void {
+    this.post({ type: 'theme', theme: this.resolveTheme() })
   }
 
   post(message: HostMessage): void {
@@ -139,8 +176,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           type: 'state',
           state: this.session.getState(),
         } satisfies HostMessage)
+        // Theme after state so the first paint is not stuck on the CSS default if config differs.
+        void this.view?.webview.postMessage({
+          type: 'theme',
+          theme: this.resolveTheme(),
+        } satisfies HostMessage)
         const backlog = this.queued.splice(0)
         for (const m of backlog) void this.view?.webview.postMessage(m)
+        return
+      }
+      case 'setTheme': {
+        await vscode.workspace
+          .getConfiguration('grokBuild')
+          .update('theme', msg.theme, vscode.ConfigurationTarget.Global)
+        // Config change listener also pushes; call explicitly so the UI updates even if the
+        // listener is slow or the value was already the same.
+        this.pushTheme()
         return
       }
       case 'stageImage':
@@ -235,8 +286,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const script = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js'),
     )
+    const stylesheet = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.css'),
+    )
     const nonce = nonceString()
-    // Styles are injected by the Svelte bundle, hence 'unsafe-inline' for style only.
+    // Component CSS is still injected by the Svelte bundle ('unsafe-inline'); design tokens and
+    // base styles load from dist/webview.css (and fonts from dist/fonts via that sheet).
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource} data:`,
@@ -245,13 +300,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       `script-src 'nonce-${nonce}'`,
     ].join('; ')
 
+    // Default data-theme before the host posts `theme` — matches grokBuild.theme default "dark".
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${csp}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Grok Build</title>
+    <link rel="stylesheet" href="${stylesheet}" />
   </head>
   <body>
     <div id="root"></div>

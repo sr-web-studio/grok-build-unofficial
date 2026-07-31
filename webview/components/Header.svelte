@@ -3,6 +3,9 @@
 
   interface Props {
     showThinking: boolean;
+    /** Resolved palette currently applied to the webview root. */
+    theme: 'dark' | 'light';
+    onToggleTheme: () => void;
     onNewSession: () => void;
     onToggleHistory: () => void;
     onToggleRewind: () => void;
@@ -17,6 +20,8 @@
 
   let {
     showThinking,
+    theme,
+    onToggleTheme,
     onNewSession,
     onToggleHistory,
     onToggleRewind,
@@ -34,53 +39,60 @@
     menuOpen = false;
     action();
   }
+
+  const themeLabel = $derived(
+    theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
+  );
 </script>
 
 <div class="header">
-  <div class="row">
-    <!-- The panel says what it is once, at the top. "Unofficial" is a standing disclaimer, not a
-         decoration: this is a community wrapper around xAI's CLI, not an xAI product. -->
-    <div class="brand">
-      <span class="title gb-kicker">Grok Build UI</span>
-      <span class="gb-tag">Unofficial</span>
-    </div>
+  <div class="brand">
+    <span class="wordmark">◆ GROK BUILD</span>
+    <span class="unofficial-tag">unofficial</span>
+  </div>
 
-    <div class="tools">
-      <button title="New session" onclick={onNewSession} aria-label="New session">
-        <Icon name="plus" size={15} />
-      </button>
-      <button title="Session history" onclick={onToggleHistory} aria-label="Session history">
-        <Icon name="clock" size={15} />
-      </button>
-      <button
-        title={isGitRepo === false ? 'Rewind (worktrees need a git repo)' : 'Rewind to an earlier prompt'}
-        onclick={onToggleRewind}
-        aria-label="Rewind"
-      >
-        <Icon name="rewind" size={15} />
-      </button>
-      <button
-        title={showThinking ? 'Hide thinking' : 'Show thinking'}
-        class:off={!showThinking}
-        onclick={() => onToggleThinking(!showThinking)}
-        aria-label="Toggle thinking"
-      >
-        <Icon name="sparkles" size={15} />
-      </button>
-      <button
-        title="More options"
-        class:active={menuOpen}
-        onclick={() => (menuOpen = !menuOpen)}
-        aria-label="More options"
-        aria-expanded={menuOpen}
-      >
-        <Icon name="ellipsis" size={15} />
-      </button>
-    </div>
+  <div class="actions">
+    <button class="icon-btn" title={themeLabel} onclick={onToggleTheme} aria-label={themeLabel}>
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
+    </button>
+    <button class="icon-btn" title="New session" onclick={onNewSession} aria-label="New session">
+      <Icon name="plus" size={16} />
+    </button>
+    <button class="icon-btn" title="Session history" onclick={onToggleHistory} aria-label="Session history">
+      <Icon name="clock" size={16} />
+    </button>
+    <button
+      class="icon-btn"
+      title={isGitRepo === false ? 'Rewind (worktrees need a git repo)' : 'Rewind to an earlier prompt'}
+      onclick={onToggleRewind}
+      disabled={isGitRepo === false}
+      aria-label="Rewind"
+    >
+      <Icon name="rewind" size={16} />
+    </button>
+    <button
+      class="icon-btn"
+      title={showThinking ? 'Hide thinking' : 'Show thinking'}
+      class:off={!showThinking}
+      onclick={() => onToggleThinking(!showThinking)}
+      aria-label="Toggle thinking"
+    >
+      <Icon name="sparkles" size={16} />
+    </button>
+    <button
+      class="icon-btn"
+      title="More options"
+      class:active={menuOpen}
+      onclick={() => (menuOpen = !menuOpen)}
+      aria-label="More options"
+      aria-expanded={menuOpen}
+    >
+      <Icon name="ellipsis" size={16} />
+    </button>
   </div>
 
   {#if menuOpen}
-    <!-- A full-frame backdrop is the cheapest dismissal that also swallows the click that raised it. -->
+    <!-- Backdrop for click dismiss -->
     <div
       class="backdrop"
       role="presentation"
@@ -89,7 +101,7 @@
     ></div>
     <div class="menu" role="menu">
       <button role="menuitem" onclick={() => run(onOpenUserConfig)}>
-        <Icon name="settings" />
+        <Icon name="settings" size={14} />
         <span>Open user config</span>
       </button>
       <button
@@ -97,30 +109,31 @@
         disabled
         title="Grok manages MCP servers itself; ACP exposes no way to list or toggle them from here yet"
       >
-        <Icon name="server" />
+        <Icon name="server" size={14} />
         <span>MCP servers</span>
-        <span class="pill">config only</span>
+        <span class="chip">config only</span>
       </button>
       <button
         role="menuitem"
         disabled
         title="Skill selection is a leader-only TUI feature — not reachable over ACP yet"
       >
-        <Icon name="layers" />
+        <Icon name="layers" size={14} />
         <span>Select skills…</span>
+        <span class="chip">leader-only</span>
       </button>
       <div class="divider"></div>
       <button role="menuitem" onclick={() => run(onShowLog)}>
-        <Icon name="list" />
+        <Icon name="list" size={14} />
         <span>Output log</span>
       </button>
       <button role="menuitem" class="danger" onclick={() => run(onRestart)}>
-        <Icon name="restart" />
+        <Icon name="restart" size={14} />
         <span>Restart agent</span>
       </button>
       <div class="divider"></div>
       <button role="menuitem" onclick={() => run(onAbout)}>
-        <Icon name="sparkles" />
+        <Icon name="sparkles" size={14} />
         <span>About</span>
       </button>
     </div>
@@ -131,58 +144,86 @@
   .header {
     position: relative;
     flex: 0 0 auto;
-    border-bottom: 1px solid var(--gb-rule-strong);
-  }
-
-  .row {
+    height: 36px;
+    background-color: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0 var(--space-3);
     display: flex;
     align-items: center;
-    gap: var(--gb-gap);
-    /* In a 300px sidebar the dropdowns alone fill the row; let the toolbar drop below them
-       instead of overflowing off the right edge where the buttons become unreachable. */
-    flex-wrap: wrap;
-    row-gap: 6px;
-    padding: 8px 10px;
+    justify-content: space-between;
+    user-select: none;
   }
 
   .brand {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     min-width: 0;
   }
 
-  .title {
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .wordmark {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
     white-space: nowrap;
   }
 
-  .tools {
+  .unofficial-tag {
+    font-size: 10px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  .actions {
     display: flex;
     align-items: center;
     gap: 2px;
-    margin-left: auto;
+    /* Six icon buttons are the header's real content; the wordmark yields to them, not the
+       other way round. Without this the brand pushed the icons off and they overlapped at 280px. */
+    flex: 0 0 auto;
   }
 
-  .tools button {
-    display: flex;
-    align-items: center;
+  /* Below the narrow sidebar there is no room for both; the wordmark alone still says what this is. */
+  @media (max-width: 320px) {
+    .unofficial-tag {
+      display: none;
+    }
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-md);
     border: none;
-    background: none;
-    color: var(--vscode-icon-foreground, var(--vscode-foreground));
-    padding: 6px;
-    border-radius: var(--gb-radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
   }
 
-  .tools button:hover,
-  .tools button.active {
-    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  .icon-btn:hover,
+  .icon-btn.active {
+    background-color: var(--bg-hover);
+    color: var(--text);
   }
 
-  .tools button.off {
-    opacity: 0.45;
+  .icon-btn.off {
+    opacity: 0.4;
+  }
+
+  .icon-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .icon-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 
   .backdrop {
@@ -200,54 +241,63 @@
     display: flex;
     flex-direction: column;
     padding: 3px;
-    background: var(--vscode-menu-background, var(--gb-surface));
-    border: 1px solid var(--vscode-menu-border, var(--gb-rule-strong));
-    border-radius: var(--gb-radius);
-    box-shadow: var(--gb-shadow);
+    background-color: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
   }
 
   .menu button {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     width: 100%;
+    height: 28px;
     text-align: left;
-    padding: 6px 8px;
+    padding: 0 var(--space-2);
     border: none;
-    border-radius: var(--gb-radius);
-    background: none;
-    color: var(--vscode-menu-foreground, var(--vscode-foreground));
-    font: inherit;
-    font-size: 0.92em;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
   }
 
   .menu button:hover:not(:disabled) {
-    background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
-    color: var(--vscode-menu-selectionForeground, inherit);
+    background-color: var(--bg-hover);
+    color: var(--text);
+  }
+
+  .menu button:focus-visible {
+    outline: none;
+    background-color: var(--bg-hover);
+    border-left: 2px solid var(--focus);
   }
 
   .menu button:disabled {
-    opacity: 0.5;
+    opacity: 0.35;
     cursor: default;
   }
 
   .menu button.danger {
-    color: var(--gb-danger);
+    color: var(--danger);
   }
 
-  .pill {
+  .chip {
     margin-left: auto;
-    font-family: var(--gb-mono);
-    font-size: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
     padding: 1px 5px;
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-inset);
+    color: var(--text-faint);
   }
 
   .divider {
     height: 1px;
     margin: 3px 0;
-    background: var(--gb-rule);
+    background-color: var(--border);
   }
 </style>

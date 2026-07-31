@@ -23,21 +23,24 @@
 </script>
 
 <div class="diff">
-  <div class="stats">
-    <span class="add">+{result.added}</span>
-    <span class="del">-{result.removed}</span>
-    {#if result.coarse}<span class="coarse">whole-file replace</span>{/if}
-  </div>
+  {#if result.coarse}
+    <div class="coarse-note">whole-file replace</div>
+  {/if}
   <div class="rows">
     {#each visible as row, i (i)}
       {#if row.type === 'gap'}
-        <div class="row gap"><span class="gutter"></span><span class="text">{row.text}</span></div>
+        <div class="line gap">
+          <!-- Gutter-span is flex: 0 0 auto so @@ markers are not clamped to 56px and overflow. -->
+          <span class="gutter-span">{row.text}</span>
+          {#if hidden > 0 && preview}
+            <span class="gap-label">Show more unchanged lines</span>
+          {/if}
+        </div>
       {:else}
-        <div class="row {row.type}">
-          <span class="gutter">{row.oldLine ?? ''}</span>
-          <span class="gutter">{row.newLine ?? ''}</span>
-          <span class="sign">{row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' '}</span>
-          <span class="text">{row.text || ' '}</span>
+        <div class="line {row.type}">
+          <span class="num old">{row.oldLine ?? ''}</span>
+          <span class="num new">{row.newLine ?? ''}</span>
+          <span class="content">{row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' '}{row.text || ' '}</span>
         </div>
       {/if}
     {/each}
@@ -47,119 +50,135 @@
       <div class="more hint">+{hidden} more lines</div>
     {/if}
   {:else if hidden > 0}
-    <button class="more" onclick={() => (expanded = true)}>Show {hidden} more lines</button>
+    <button type="button" class="more" onclick={() => (expanded = true)}>Show {hidden} more lines</button>
   {:else if expanded && result.rows.length > maxRows}
-    <button class="more" onclick={() => (expanded = false)}>Collapse</button>
+    <button type="button" class="more" onclick={() => (expanded = false)}>Collapse</button>
   {/if}
 </div>
 
 <style>
   .diff {
-    font-family: var(--gb-mono);
+    background-color: var(--bg-inset);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
     font-size: 12px;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    overflow: hidden;
-    background: var(--vscode-editor-background);
-  }
-
-  .stats {
-    display: flex;
-    gap: 9px;
-    padding: 3px 9px;
-    border-bottom: 1px solid var(--gb-rule);
-    background: var(--gb-surface);
-    font-size: 11.5px;
-    font-weight: 700;
-  }
-
-  .add {
-    color: var(--vscode-gitDecoration-addedResourceForeground, #4ec97b);
-  }
-
-  .del {
-    color: var(--vscode-gitDecoration-deletedResourceForeground, #e15c5c);
-  }
-
-  .coarse {
-    color: var(--gb-dim);
-    font-weight: 400;
-  }
-
-  .row {
-    display: flex;
-    /* Long lines soft-wrap rather than scroll sideways. In a 300–380px sidebar a horizontal
-       scrollbar hides the right half of every edit, and the diff is the one thing you have to
-       read before approving it. The gutters stay pinned to the first visual row, so the wrapped
-       remainder hangs under the code column and still reads as one line. */
-    align-items: flex-start;
     line-height: 1.5;
-  }
-
-  .row.add {
-    background: var(--vscode-diffEditor-insertedTextBackground, rgba(78, 201, 123, 0.14));
-  }
-
-  .row.del {
-    background: var(--vscode-diffEditor-removedTextBackground, rgba(225, 92, 92, 0.14));
-  }
-
-  .row.gap {
-    color: var(--gb-dim);
-    background: var(--gb-surface);
-    font-style: italic;
-  }
-
-  .gutter {
-    flex: 0 0 3ch;
-    text-align: right;
-    padding-right: 0.5ch;
-    color: var(--vscode-editorLineNumber-foreground);
-    user-select: none;
-    white-space: pre;
-  }
-
-  .sign {
-    flex: 0 0 1.5ch;
-    user-select: none;
-    white-space: pre;
-  }
-
-  .text {
-    flex: 1 1 auto;
+    overflow: hidden;
     min-width: 0;
-    padding-right: 0.6em;
-    /* pre-wrap keeps the leading indentation; anywhere breaks the tokens that have no space in
-       them at all (minified lines, long paths, base64) instead of forcing the row wider. */
+  }
+
+  .coarse-note {
+    padding: 4px var(--space-2);
+    font-size: 11px;
+    color: var(--text-faint);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .line {
+    display: flex;
+    align-items: flex-start;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .line.add {
+    background-color: var(--diff-add-bg);
+    color: var(--diff-add-text);
+  }
+
+  .line.del {
+    background-color: var(--diff-del-bg);
+    color: var(--diff-del-text);
+  }
+
+  .line.same,
+  .line.ctx {
+    color: var(--text);
+  }
+
+  .num {
+    width: 28px;
+    min-width: 28px;
+    text-align: right;
+    padding-right: 6px;
+    color: var(--text-faint);
+    user-select: none;
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+  }
+
+  .num.new {
+    padding-right: 8px;
+  }
+
+  .content {
+    flex: 1;
+    padding-left: 6px;
+    padding-right: 8px;
+    min-width: 0;
+    /* pre-wrap keeps leading indentation; anywhere breaks unbreakable tokens. */
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 
-  /* Flush left like every other label in the system, not centred across the card. */
+  .line.gap {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 4px 0;
+    font-size: 11px;
+    font-style: italic;
+    color: var(--text-faint);
+    background-color: var(--bg);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /*
+   * The @@ / gap marker spans both gutter columns, so it must size to its own text
+   * instead of being clamped to a fixed gutter and overflowing onto the content.
+   */
+  .gutter-span {
+    flex: 0 0 auto;
+    padding-left: 6px;
+    text-align: left;
+    color: var(--text-faint);
+    user-select: none;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    font-style: normal;
+  }
+
+  .gap-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: 0;
+  }
+
   .more {
     display: block;
     width: 100%;
     text-align: left;
     padding: 4px 9px;
     border: none;
-    border-top: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    background: var(--gb-surface);
-    color: var(--gb-accent);
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--accent);
     cursor: pointer;
     font-family: inherit;
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 500;
   }
 
   .more:hover {
-    background: var(--vscode-list-hoverBackground);
+    background: var(--bg-hover);
   }
 
-  /* Not a button: it must not light up on hover, or it reads as a second thing to click. */
   .more.hint {
-    background: var(--gb-surface);
-    color: var(--gb-dim);
+    color: var(--text-faint);
     font-weight: 400;
     cursor: default;
   }

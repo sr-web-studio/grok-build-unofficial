@@ -16,7 +16,7 @@
   const inProgress = $derived(entries.find((e) => e.status === 'in_progress')?.content);
   const summary = $derived(
     inProgress
-      ? `Working: ${inProgress}`
+      ? inProgress
       : done === total && total > 0
         ? 'All steps done'
         : `${done}/${total} done`,
@@ -24,33 +24,35 @@
 </script>
 
 {#if total > 0}
-  <!--
-    In-flow under the transcript (not absolute). Takes a strip of height so messages never sit
-    behind the plan chrome; expand grows upward within max-height on the list only.
-  -->
   <div class="dock" role="region" aria-label="Plan">
-    <button class="head" type="button" onclick={() => (open = !open)} aria-expanded={open}>
-      <span class="chev" class:closed={!open}><Icon name="chevron" size={12} /></span>
-      <span class="gb-kicker">Plan</span>
-      <span class="count gb-meta">{done}/{total}</span>
-      <span class="bar"><span class="fill" style="width: {total ? (done / total) * 100 : 0}%"></span></span>
-      <span class="sum" title={summary}>{summary}</span>
+    <button class="dock-header" type="button" onclick={() => (open = !open)} aria-expanded={open}>
+      <div class="dock-title">
+        <span class="chev" class:closed={!open}><Icon name="chevron" size={12} /></span>
+        <span class="kicker">PLAN</span>
+        <span class="count">{done}/{total}</span>
+        <div class="meter">
+          <div class="fill" class:complete={done === total} style="width: {total ? (done / total) * 100 : 0}%;"></div>
+        </div>
+      </div>
+      <span class="step-summary" title={summary}>{summary}</span>
     </button>
     {#if open}
-      <ul>
+      <div class="dock-items" role="list">
         {#each entries as entry, i (i)}
-          <li class={entry.status ?? 'pending'}>
-            <span class="box">
-              {#if entry.status === 'completed'}
-                <Icon name="check" size={11} />
-              {:else if entry.status === 'in_progress'}
-                <span class="dot"></span>
-              {/if}
-            </span>
-            <span class="text">{entry.content}</span>
-          </li>
+          <!-- A plan row is read-only status, not a control: no tabindex, or the whole dock
+               becomes a tab stop per entry with nothing to activate. -->
+          <div class="dock-item" class:done={entry.status === 'completed'} role="listitem">
+            {#if entry.status === 'completed'}
+              <span class="icon-done"><Icon name="check" size={11} /></span>
+            {:else if entry.status === 'in_progress'}
+              <span class="icon-active"></span>
+            {:else}
+              <span class="icon-pending"></span>
+            {/if}
+            <span class="item-text">{entry.content}</span>
+          </div>
         {/each}
-      </ul>
+      </div>
     {/if}
   </div>
 {/if}
@@ -58,134 +60,152 @@
 <style>
   .dock {
     flex: 0 0 auto;
-    margin: 0 10px 8px;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius);
-    background: var(--gb-surface);
-    overflow: hidden;
+    margin: 0 12px 8px 12px;
+    background-color: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2) var(--space-3);
   }
 
-  .head {
+  .dock-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
     width: 100%;
-    padding: 8px 12px;
     border: none;
-    background: none;
-    color: var(--vscode-foreground);
-    font: inherit;
-    text-align: left;
+    background: transparent;
+    font-family: var(--font-ui);
+    font-size: 11.5px;
+    color: var(--text-muted);
     cursor: pointer;
+    user-select: none;
+    padding: 0;
   }
 
-  .head:hover {
-    background: var(--vscode-list-hoverBackground);
+  .dock-header:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .dock-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .chev {
     display: flex;
-    transition: transform 0.12s ease;
-    color: var(--gb-dim);
+    align-items: center;
+    color: var(--text-faint);
+    transition: transform var(--dur-fast) var(--ease-standard);
   }
 
   .chev.closed {
     transform: rotate(-90deg);
   }
 
-  .count {
-    flex: 0 0 auto;
+  .kicker {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
   }
 
-  .bar {
-    flex: 0 1 4em;
-    height: 4px;
-    background: var(--gb-rule);
-    border-radius: 999px;
-    min-width: 2em;
+  .count {
+    color: var(--text-muted);
+  }
+
+  .meter {
+    width: 48px;
+    height: 3px;
+    background-color: var(--border);
+    border-radius: var(--radius-full);
     overflow: hidden;
   }
 
   .fill {
-    display: block;
     height: 100%;
-    background: var(--gb-accent);
-    border-radius: 999px;
+    background-color: var(--accent);
   }
 
-  .sum {
-    flex: 1 1 auto;
-    min-width: 0;
+  .fill.complete {
+    background-color: var(--success);
+  }
+
+  .step-summary {
+    color: var(--text);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--gb-dim);
-    font-size: 0.85em;
+    max-width: 180px;
   }
 
-  ul {
-    list-style: none;
-    margin: 0;
-    padding: 8px 12px 10px;
+  .dock-items {
+    margin-top: var(--space-2);
     display: flex;
     flex-direction: column;
     gap: 6px;
-    border-top: 1px solid var(--gb-rule);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
     max-height: 10em;
-    overflow: auto;
+    overflow-y: auto;
   }
 
-  li {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-    font-size: 0.9em;
-    padding-top: 2px;
-    line-height: 1.45;
-  }
-
-  .box {
-    flex: 0 0 auto;
-    width: 14px;
-    height: 14px;
-    margin-top: 1px;
-    border: 1px solid var(--gb-rule);
-    border-radius: var(--gb-radius-sm);
+  .dock-item {
     display: flex;
     align-items: center;
-    justify-content: center;
-    color: var(--gb-ok);
+    gap: var(--space-2);
+    font-size: 12.5px;
+    color: var(--text);
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    border-left: 2px solid transparent;
   }
 
-  li.completed .box {
-    border-color: var(--gb-ok);
-    background: color-mix(in srgb, var(--gb-ok) 18%, transparent);
+  .dock-item:focus-visible {
+    outline: none;
+    background-color: var(--bg-hover);
+    border-left: 2px solid var(--focus);
   }
 
-  li.in_progress .box {
-    border-color: var(--gb-accent);
-  }
-
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--gb-accent);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    50% {
-      opacity: 0.35;
-    }
-  }
-
-  li.completed .text {
-    color: var(--gb-dim);
+  .dock-item.done {
+    color: var(--text-faint);
     text-decoration: line-through;
   }
 
-  .text {
+  .icon-done {
+    color: var(--success);
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .icon-active {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    animation: pulse 1.5s infinite ease-in-out;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 0.4; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0.4; transform: scale(0.9); }
+  }
+
+  .icon-pending {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
+    flex-shrink: 0;
+  }
+
+  .item-text {
     flex: 1 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;

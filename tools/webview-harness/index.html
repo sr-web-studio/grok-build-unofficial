@@ -106,8 +106,8 @@
 
       <div class="group">
         <select id="theme">
-          <option value="dark">Dark Modern</option>
-          <option value="light">Light Modern</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
         </select>
         <select id="width">
           <option value="300">300px (narrow sidebar)</option>
@@ -166,12 +166,22 @@
         if (!message) return;
         append(message.type, message);
         // The panel announces `ready` on load and on reload; replay whatever is selected.
-        if (message.type === 'ready') start(current);
+        if (message.type === 'ready') {
+          sendTheme();
+          start(current);
+        }
       });
 
-      document.getElementById('theme').onchange = (e) => {
-        frame.src = `panel.html?theme=${e.currentTarget.value}`;
-      };
+      /*
+       * The app owns `data-theme` (it writes it from the `theme` HostMessage), so setting the
+       * attribute from the harness page is not enough — the effect overwrites it on mount. Send
+       * the same message `src/host/panel.ts` sends instead.
+       */
+      function sendTheme() {
+        post({ type: 'theme', theme: document.getElementById('theme').value });
+      }
+
+      document.getElementById('theme').onchange = sendTheme;
       document.getElementById('width').onchange = (e) => {
         frame.width = e.currentTarget.value;
       };

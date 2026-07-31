@@ -31,3 +31,6 @@ Desktop.ini
 .idea/
 *.swp
 *~
+
+# Design-mock iteration screenshots: 8MB of throwaway visual diffs, not sources
+tools/design-mock/shot-*.png

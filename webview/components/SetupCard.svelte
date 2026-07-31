@@ -20,8 +20,8 @@
 
 <div class="setup" role="region" aria-label="Setup required">
   <div class="kicker-row">
-    <span class="gb-tag">Unofficial</span>
-    <span class="kicker gb-kicker">Setup</span>
+    <span class="tag">unofficial</span>
+    <span class="kicker">SETUP</span>
   </div>
 
   <h2 class="title">{hint.title}</h2>
@@ -35,15 +35,15 @@
 
   <div class="actions">
     {#if hint.installUrl}
-      <button class="primary" type="button" onclick={openInstall}>
+      <button class="btn-primary" type="button" onclick={openInstall}>
         Open grok.x.ai
       </button>
     {/if}
-    <button class="secondary" type="button" onclick={retry}>
+    <button class="btn-secondary" type="button" onclick={retry}>
       <Icon name="restart" size={13} />
       Retry
     </button>
-    <button class="ghost" type="button" onclick={() => send({ type: 'showLog' })}>
+    <button class="btn-ghost" type="button" onclick={() => send({ type: 'showLog' })}>
       View log
     </button>
   </div>
@@ -51,98 +51,153 @@
 
 <style>
   .setup {
+    background-color: var(--bg-raised);
+    border-left: 2px solid var(--warning);
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
     margin: 10px 2px 6px;
-    padding: 16px 16px 14px;
-    border: 1px solid var(--gb-rule-strong);
-    border-left: 3px solid var(--gb-accent);
-    border-radius: var(--gb-radius-lg);
-    background: var(--gb-surface);
   }
 
   .kicker-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: var(--space-2);
+  }
+
+  .tag {
+    font-size: 10px;
+    color: var(--text-faint);
   }
 
   .kicker {
-    color: var(--gb-dim);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
   }
 
   .title {
-    margin: 0 0 8px;
-    font-size: 1.05em;
-    font-weight: 800;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
     line-height: 1.3;
+    color: var(--text);
   }
 
   .lead {
-    margin: 0 0 10px;
-    font-size: 0.9em;
+    margin: 0;
+    font-size: 12.5px;
     line-height: 1.5;
-    color: var(--gb-dim);
+    color: var(--text-muted);
   }
 
   .lead strong {
-    color: var(--vscode-foreground);
-    font-weight: 700;
+    color: var(--text);
+    font-weight: 600;
   }
 
   .detail {
-    margin: 0 0 12px;
-    padding: 8px 10px;
-    border-left: 2px solid var(--gb-rule);
-    background: var(--gb-surface-sunken);
-    font-family: var(--gb-mono);
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--bg-inset);
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
     font-size: 11.5px;
     line-height: 1.55;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    color: var(--vscode-foreground);
+    color: var(--text);
   }
 
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--space-2);
     align-items: center;
   }
 
-  button {
+  .btn-primary {
+    background-color: var(--accent);
+    color: var(--accent-fg);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0 12px;
+    height: 22px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 6px 12px;
-    border-radius: var(--gb-radius-sm);
+    justify-content: center;
     cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-standard);
   }
 
-  .primary {
-    border: 1px solid transparent;
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+  .btn-primary:hover {
+    background-color: var(--accent-hover);
   }
 
-  .primary:hover {
-    background: var(--vscode-button-hoverBackground);
+  .btn-primary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 
-  .secondary {
-    border: 1px solid var(--gb-accent);
-    background: color-mix(in srgb, var(--gb-accent) 14%, transparent);
-    color: var(--vscode-foreground);
+  .btn-secondary {
+    background-color: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 0 12px;
+    height: 22px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-standard);
   }
 
-  .ghost {
-    border: 1px solid transparent;
-    background: none;
-    color: var(--gb-accent);
-    text-decoration: underline;
-    padding-left: 6px;
-    padding-right: 6px;
+  .btn-secondary:hover {
+    background-color: var(--bg-hover);
+  }
+
+  .btn-secondary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--text-muted);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0 8px;
+    height: 22px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+  }
+
+  .btn-ghost:hover {
+    color: var(--text);
+    background-color: var(--bg-hover);
+  }
+
+  .btn-ghost:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 </style>
