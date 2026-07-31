@@ -53,8 +53,8 @@ npm run publish:openvsx
 # → https://open-vsx.org/extension/sr-web-studio/grok-build-unofficial
 ```
 
-First Open VSX publish needs the namespace `sr-web-studio` (same as Marketplace publisher id).  
-`ovsx create-namespace sr-web-studio` is handled by `tools/publish-openvsx.mjs` / `tools/ovsx-setup-and-publish.mjs`.
+Open VSX needs the namespace `sr-web-studio` (same as the Marketplace publisher id). It already
+exists; a fresh publisher would create it once with `npx ovsx create-namespace sr-web-studio -p $OVSX_PAT`.
 
 ## Tag-driven release (CI)
 

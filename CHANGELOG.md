@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-31
+
+A full UI rethink. The webview now owns its look instead of inheriting the editor theme, and every
+tool call is readable at a glance. **No features were removed.**
+
+### Added
+
+- **Own design system** — xAI-monochrome palette as CSS custom properties, bundled variable **Inter**
+  and **JetBrains Mono**, one shared button set, authored **light and dark** themes
+- **`grokBuild.theme`** setting (`dark` | `light` | `followVsCode`, default `dark`) plus a **header
+  theme toggle** — light mode is designed, not derived
+- **Always-on tool previews** — READ and WRITE render a real code view (line numbers, mono, inset
+  background, no wrap) capped at 11 rows with a fade and an expand/collapse toggle; EDIT shows its
+  diff without a click
+- **Copy control** below both user and assistant messages, and an always-visible copy button on every
+  fenced code block
+- **Dismiss button** on the plan dock, keyed to the plan's steps so progress keeps it hidden and a new
+  plan brings it back
+
+### Changed
+
+- Tool rows share one skin with a fixed verb column and a common left edge, so targets line up;
+  adjacent rows sit contiguous
+- Terminal rows drop the empty verb slot and give those pixels to the command, which can be expanded
+  into a wrapped full-width block
+- Approval cards put the verb in the title and the file on one clickable workspace-relative line
+- Thought bodies are dimmer and hairline-indented, so a thought no longer reads like an answer
+- Empty session is a centered wordmark and one line of text; session history and rewind lists tightened
+- VSIX shrank from 796 KB / 24 files to 275 KB / 16 files — fonts are bundled into `dist/` once
+
+### Fixed
+
+- The **"Latest" pill** stayed pinned to the end of the transcript and scrolled away after the first
+  message; it now floats above the composer
+- Grok's `N→` line prefixes were printed on top of the preview's own gutter — they are stripped, the
+  real file line is shown, and **`open` jumps the editor to that line**
+- An unmapped tool kind rendered its label twice (`ASK USER Ask User`)
+- Question option descriptions were ellipsised away, session rows inherited centered UA button text,
+  and the header wordmark overlapped the icon buttons at narrow widths
+
 ## [0.1.3] — 2026-07-29
 
 ### Changed
