@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-08-02
+
+Tool rows got quieter. A few days of real use showed the always-on previews making short answers
+look enormous — mostly because the agent reads a lot of files.
+
 ### Changed
 
 - **READ rows are the link alone** — no inline preview. Reading a file is a step, not an answer, and
@@ -16,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are the way to read the whole change; the preview only has to make it recognisable
 - **Terminal output is capped shorter** (9rem) and **keeps its expand** — it is the one tool output
   with no editor to open instead
+
+### Fixed
+
+- The code preview's pixel height cap clipped its last row whenever a horizontal scrollbar claimed
+  space inside the box
 
 ## [0.2.0] — 2026-07-31
 
