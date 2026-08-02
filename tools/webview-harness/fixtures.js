@@ -222,10 +222,14 @@ function showcaseBlocks() {
       input: { command: LONG_COMMAND },
       contents: [
         {
+          // Long on purpose: terminal output is the one preview that still owns an expand toggle,
+          // so the harness needs an output that actually overflows the collapsed cap.
           type: 'text',
           text:
             '> tsc --noEmit -p tsconfig.json\n' +
             '> svelte-check --tsconfig ./tsconfig.webview.json\n' +
+            '\n' +
+            Array.from({ length: 14 }, (_, i) => `  checking webview/components/Part${i + 1}.svelte`).join('\n') +
             '\n====================================\n' +
             'svelte-check found 0 errors and 0 warnings',
         },

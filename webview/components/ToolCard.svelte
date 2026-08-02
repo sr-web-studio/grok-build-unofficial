@@ -23,8 +23,11 @@
     permission: 'PERM',
   };
 
-  /** ~10–12 lines of mono preview; shared by CodePreview and DiffView. */
-  const PREVIEW_MAX_ROWS = 11;
+  /**
+   * A peek, not a viewer. WRITE and EDIT show enough to recognise the change; `diff` and `open`
+   * are how you actually read it, so the inline preview stays short and has no expand of its own.
+   */
+  const PREVIEW_MAX_ROWS = 8;
 
   interface Props {
     block: ToolBlock;
@@ -110,36 +113,25 @@
   });
 
   /**
-   * Grok's read tool hands back display-ready text: every line is prefixed `N→`, where N is the
-   * real line in the file. Rendering that inside a preview which draws its own gutter printed the
-   * numbers twice. Strip the prefixes, keep the first N — it tells the gutter which line the
-   * preview starts at, and tells the editor where to jump when the row is opened.
+   * A READ renders as the link alone — no preview. The agent reading a file is a step, not an
+   * answer, and a dozen inline file views turned a three-line reply into a wall. The one thing
+   * worth keeping from the output is where the read started: Grok prefixes every line `N→` with
+   * the real file line, so the first N tells `open` where to put the cursor.
    */
-  const numberedRead = $derived.by(() => {
+  const readStartLine = $derived.by(() => {
     if (!body || terminal || block.toolKind !== 'read') return undefined;
-    const lines = body.split('\n');
-    const matches = lines.map((l) => /^\s*(\d+)→(.*)$/.exec(l));
-    const hits = matches.filter((m) => m !== null).length;
-    // A file that merely contains an arrow must not be mangled — demand the whole block.
-    if (hits === 0 || hits < lines.length - 1) return undefined;
-    const first = matches.find((m) => m !== null)!;
-    return {
-      text: matches.map((m, i) => (m ? m[2] : lines[i])).join('\n'),
-      startLine: Number(first[1]),
-    };
+    const first = /^\s*(\d+)→/m.exec(body);
+    return first ? Number(first[1]) : undefined;
   });
 
-  /** Where `open` should land: the line the preview actually starts at, if we know it. */
-  const openLine = $derived(block.locations[0]?.line ?? numberedRead?.startLine);
+  /** Where `open` should land: the line the read actually started at, if we know it. */
+  const openLine = $derived(block.locations[0]?.line ?? readStartLine);
 
   /**
    * While the tool is still running, keep a single stable header row. Peek/tail/diff
    * previews only appear after completion — mid-flight content thrash is what made tool
    * cards feel artificial. Terminal output is the exception (streams live).
    */
-  const showReadPreview = $derived(
-    !busy && !failed && !diff && !terminal && block.toolKind === 'read' && Boolean(body),
-  );
   const showWritePreview = $derived(!busy && !failed && isWriteDiff && Boolean(diff?.newText));
   const showEditPreview = $derived(!busy && !failed && isEditDiff && Boolean(diff));
   /** SEARCH / LIST / FETCH / other — single-line tail, not a code preview. */
@@ -320,19 +312,9 @@
     </button>
   {/if}
 
-  {#if showReadPreview}
-    <div class="preview-body">
-      <CodePreview
-        text={numberedRead?.text ?? body}
-        startLine={numberedRead?.startLine ?? 1}
-        maxRows={PREVIEW_MAX_ROWS}
-      />
-    </div>
-  {/if}
-
   {#if showWritePreview && diff}
     <div class="preview-body">
-      <CodePreview text={diff.newText} maxRows={PREVIEW_MAX_ROWS} />
+      <CodePreview text={diff.newText} maxRows={PREVIEW_MAX_ROWS} expandable={false} />
     </div>
   {/if}
 
@@ -344,14 +326,14 @@
       </span>
     </div>
     <div class="preview-body">
-      <DiffView oldText={diff.oldText} newText={diff.newText} maxRows={PREVIEW_MAX_ROWS} />
+      <DiffView oldText={diff.oldText} newText={diff.newText} maxRows={PREVIEW_MAX_ROWS} preview />
     </div>
   {/if}
 
   {#if showTerminalOut}
     <div class="preview-body">
       <pre class="terminal-out" class:expanded={outputExpanded}>{body}</pre>
-      {#if body.split('\n').length > 12 || body.length > 800}
+      {#if body.split('\n').length > 8 || body.length > 600}
         <button
           type="button"
           class="ghost-action show-all"
@@ -364,7 +346,8 @@
   {:else if showExpandedBody}
     <div class="preview-body">
       {#if body}
-        <pre class="terminal-out" class:expanded={outputExpanded}>{body}</pre>
+        <!-- This branch *is* the expanded view — the row's own tail is what collapsed looks like. -->
+        <pre class="terminal-out expanded">{body}</pre>
       {:else if Object.keys(input).length > 0}
         <pre class="terminal-out dim">{JSON.stringify(input, null, 2)}</pre>
       {/if}
@@ -658,7 +641,8 @@
 
   .terminal-out {
     margin: 0;
-    max-height: 12rem;
+    /* A peek — roughly eight lines, matching the code preview's row cap. */
+    max-height: 9rem;
     overflow: auto;
     padding: var(--space-2) var(--space-3);
     background: var(--bg-inset);

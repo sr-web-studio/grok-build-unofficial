@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **READ rows are the link alone** — no inline preview. Reading a file is a step, not an answer, and
+  a handful of full file views made a three-line reply look enormous. `open` still jumps the editor
+  to the line the read started at
+- **WRITE and EDIT previews are a peek** — 8 rows, and the inline expand is gone. `diff` and `open`
+  are the way to read the whole change; the preview only has to make it recognisable
+- **Terminal output is capped shorter** (9rem) and **keeps its expand** — it is the one tool output
+  with no editor to open instead
+
 ## [0.2.0] — 2026-07-31
 
 A full UI rethink. The webview now owns its look instead of inheriting the editor theme, and every

@@ -1,17 +1,23 @@
 <script lang="ts">
   /**
-   * Always-visible code preview for READ and WRITE tool rows.
+   * Always-visible code preview for WRITE tool rows.
    * Dumb: text + row cap in, expand state local. No wrap — long lines scroll horizontally.
    */
   interface Props {
     text: string;
-    /** Visible line count when collapsed. ~10–12 lines of 12.5px/1.55 mono. */
+    /** Visible line count when collapsed. */
     maxRows?: number;
     /** Real file line of `text`'s first line, so the gutter matches the editor. */
     startLine?: number;
+    /**
+     * When false the overflow is announced instead of offered. A write row already has `open`,
+     * which shows the whole file in a real editor — a second way to read it inline only makes a
+     * short answer look long, which is the thing the preview was meant to avoid.
+     */
+    expandable?: boolean;
   }
 
-  let { text, maxRows = 11, startLine = 1 }: Props = $props();
+  let { text, maxRows = 8, startLine = 1, expandable = true }: Props = $props();
 
   let expanded = $state(false);
 
@@ -21,11 +27,13 @@
       : text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n'),
   );
   const overflows = $derived(lines.length > maxRows);
+  const canExpand = $derived(expandable && overflows);
   const visible = $derived(expanded || !overflows ? lines : lines.slice(0, maxRows));
+  const hidden = $derived(lines.length - visible.length);
 </script>
 
 <div class="code-preview">
-  <div class="scroll" class:capped={!expanded && overflows}>
+  <div class="scroll">
     {#each visible as line, i (i)}
       <div class="line">
         <span class="num">{i + startLine}</span>
@@ -36,7 +44,7 @@
   {#if !expanded && overflows}
     <div class="fade" aria-hidden="true"></div>
   {/if}
-  {#if overflows}
+  {#if canExpand}
     <button
       type="button"
       class="toggle"
@@ -46,6 +54,8 @@
     >
       {expanded ? 'collapse' : 'expand'}
     </button>
+  {:else if overflows}
+    <div class="toggle hint">+{hidden} more lines</div>
   {/if}
 </div>
 
@@ -65,12 +75,10 @@
     font-size: 12.5px;
     line-height: 1.55;
     color: var(--text);
-    /* ~11 lines: 11 * 12.5 * 1.55 ≈ 213px; slice is the real cap. */
-    max-height: calc(11 * 12.5px * 1.55);
-  }
-
-  .scroll:not(.capped) {
-    max-height: none;
+    /*
+     * No max-height. The row slice above is the cap, and a pixel cap on top of it clipped the
+     * last line whenever a horizontal scrollbar claimed a few pixels inside the box.
+     */
   }
 
   .line {
@@ -128,5 +136,16 @@
   .toggle:focus-visible {
     background: var(--bg-hover);
     color: var(--text);
+  }
+
+  .toggle.hint {
+    color: var(--text-faint);
+    font-weight: 400;
+    cursor: default;
+  }
+
+  .toggle.hint:hover {
+    background: var(--bg);
+    color: var(--text-faint);
   }
 </style>
