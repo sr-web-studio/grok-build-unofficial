@@ -115,6 +115,37 @@
     return out;
   });
 
+  /** Is the tool call this approval belongs to rendered above it? Then the card need not repeat it. */
+  function hasToolRow(toolCallId: string | undefined): boolean {
+    if (!toolCallId) return false;
+    return visible.some((b) => b.kind === 'tool' && b.toolCallId === toolCallId);
+  }
+
+  /**
+   * An unanswered card is waiting on a click, so the transcript must hold still. Auto-scrolling
+   * while the pointer is over a button moves the target out from under it and the browser drops
+   * the click — which is why an approve button could need pressing several times.
+   */
+  const pendingBlockId = $derived(
+    visible.find(
+      (b) =>
+        (b.kind === 'approval' && b.decision === undefined) ||
+        (b.kind === 'question' && !b.answered) ||
+        (b.kind === 'proposedPlan' && b.decision === undefined),
+    )?.id,
+  );
+  const awaitingUser = $derived(pendingBlockId !== undefined);
+
+  /** Bring a new pending card into view once — after that the transcript stays put. */
+  $effect(() => {
+    const id = pendingBlockId;
+    if (!id || !scroller) return;
+    const el = scroller.querySelector<HTMLElement>(
+      `[data-block-id="${CSS.escape(id)}"]`,
+    );
+    el?.scrollIntoView({ block: 'nearest' });
+  });
+
   /** Pinned user bubble — updates as you scroll past earlier turns (Claude Code-style). */
   const stickyUserBlock = $derived.by(() => {
     if (!stickyUserId) return undefined;
@@ -169,7 +200,9 @@
       stuck &&
       scroller &&
       agentState !== 'starting' &&
-      !statusLoading
+      !statusLoading &&
+      // A pending approval / question / plan owns the viewport until it is answered.
+      !awaitingUser
     ) {
       scroller.scrollTop = scroller.scrollHeight;
     }
@@ -298,6 +331,7 @@
           prev.block.kind === 'text' &&
           prev.block.role === 'user'
         }
+        data-block-id={block.id}
         data-user-id={row.kind === 'single' && block.kind === 'text' && block.role === 'user' ? block.id : undefined}
       >
         {#if row.kind === 'grok'}
@@ -401,7 +435,13 @@
         {:else if block.kind === 'question'}
           <Question {block} onAnswer={onAnswerQuestion} />
         {:else if block.kind === 'approval'}
-          <Approval {block} {cwd} {onOpenPath} onDecide={onApprove} />
+          <Approval
+            {block}
+            {cwd}
+            compact={hasToolRow(block.request.toolCallId)}
+            {onOpenPath}
+            onDecide={onApprove}
+          />
         {:else if block.kind === 'notice'}
           <Notice {block} {onShowLog} />
         {:else if block.kind === 'turn'}

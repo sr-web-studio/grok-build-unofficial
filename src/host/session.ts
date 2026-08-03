@@ -1641,6 +1641,21 @@ export class GrokSession implements vscode.Disposable {
   private async askApproval(
     request: ApprovalRequest,
   ): Promise<ApprovalDecision> {
+    /*
+     * Bypass is a promise, so it is enforced here as well as in the gate — one authority, checked
+     * at the only place a card can be born. Every caller already consults the gate, but a caller
+     * that forgets (grok's own `session/request_permission` used to) turns "never ask" into a
+     * prompt, and that is the single most annoying way this extension can misbehave.
+     */
+    if (this.gate.getMode() === 'bypassPermissions') {
+      this.deps.log(
+        `bypass: auto-approved ${request.kind} without asking (${request.title})`,
+      )
+      return 'once'
+    }
+    this.deps.log(
+      `approval asked: kind=${request.kind} mode=${this.gate.getMode()} title=${request.title}`,
+    )
     request.alwaysScope = this.gate.describeAlwaysScope(request)
     const block = this.addBlock(
       {
@@ -1856,32 +1871,66 @@ export class GrokSession implements vscode.Disposable {
     return created
   }
 
-  /** Never observed on v0.2.112, but handled so a future grok release does not break the UI. */
+  /**
+   * grok's own permission request. Not observed on v0.2.112 over ACP, but a leader-attached
+   * session can raise it, and when it does the answer has to obey *our* mode: an agent-side
+   * prompt that ignores Bypass makes "never ask" a lie.
+   */
   private async onAgentPermissionRequest(
     params: RequestPermissionParams,
   ): Promise<unknown> {
     const options = params.options ?? []
-    const decision = await this.askApproval({
-      requestId: `apr-${++this.approvalSeq}`,
-      kind: 'agentPermission',
-      title: params.toolCall?.title ?? 'Permission required',
-      toolCallId: params.toolCall?.toolCallId,
-      agentOptions: options.map((o) => ({
-        optionId: o.optionId,
-        name: o.name,
-        kind: o.kind,
-      })),
-    })
-    const wanted =
+    const mode = this.gate.getMode()
+    // Plan mode says no to everything that could touch the workspace; bypass says yes. Only the
+    // two asking modes reach the user, and `askApproval` re-checks bypass as a backstop.
+    const decision: ApprovalDecision =
+      mode === 'bypassPermissions'
+        ? 'once'
+        : mode === 'plan'
+          ? 'reject'
+          : await this.askApproval({
+              requestId: `apr-${++this.approvalSeq}`,
+              kind: 'agentPermission',
+              title: params.toolCall?.title ?? 'Permission required',
+              toolCallId: params.toolCall?.toolCallId,
+              agentOptions: options.map((o) => ({
+                optionId: o.optionId,
+                name: o.name,
+                kind: o.kind,
+              })),
+            })
+    const allowing = decision === 'once' || decision === 'always'
+    const preferred: string[] =
       decision === 'always'
-        ? 'allow_always'
+        ? ['allow_always', 'allow_once']
         : decision === 'once'
-          ? 'allow_once'
+          ? ['allow_once', 'allow_always']
           : decision === 'rejectAlways'
-            ? 'reject_always'
-            : 'reject_once'
-    const chosen = options.find((o) => o.kind === wanted) ?? options[0]
-    if (!chosen) return { outcome: { outcome: 'cancelled' } }
+            ? ['reject_always', 'reject_once']
+            : ['reject_once', 'reject_always']
+    /*
+     * Pick by `kind` first, then by the option's own wording, and never fall through to
+     * `options[0]`: a blind first-option answer can reject what the user allowed, and grok then
+     * re-raises the request — which reads as an approve button that needs clicking ten times.
+     */
+    const byKind = preferred
+      .map((k) => options.find((o) => o.kind === k))
+      .find(Boolean)
+    const byName = options.find((o) => {
+      const n = (o.name ?? '').toLowerCase()
+      const yes = /allow|approve|accept|yes|proceed/.test(n)
+      const no = /reject|deny|no|cancel|stop/.test(n)
+      return allowing ? yes && !no : no
+    })
+    const chosen = byKind ?? byName
+    if (!chosen) {
+      this.deps.log(
+        `permission request had no ${allowing ? 'allow' : 'reject'} option (${options
+          .map((o) => `${o.kind}:${o.name}`)
+          .join(', ')}) — cancelling`,
+      )
+      return { outcome: { outcome: 'cancelled' } }
+    }
     return { outcome: { outcome: 'selected', optionId: chosen.optionId } }
   }
 

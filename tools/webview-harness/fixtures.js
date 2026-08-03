@@ -289,8 +289,65 @@ function showcaseBlocks() {
 }
 
 function approvalBlocks() {
+  /*
+   * The real shape: grok announces the tool call, then the gate asks. The card is anchored to that
+   * tool row, so it must render compact — title and buttons only, no second copy of the command.
+   * The unanchored cards below it are the fallback shape (no tool row to lean on) and still show
+   * the full detail.
+   */
+  const cmdTool = toolBlock({
+    name: 'run_terminal_command',
+    label: 'Run Command',
+    toolKind: 'execute',
+    readOnly: false,
+    status: 'pending',
+    waiting: true,
+    input: { command: 'rm -rf dist && npm run build -- --production' },
+  });
+  const writeTool = toolBlock({
+    name: 'write',
+    label: 'Write',
+    toolKind: 'edit',
+    readOnly: false,
+    status: 'pending',
+    waiting: true,
+    input: { path: `${CWD}/webview/components/StatusLine.svelte` },
+    locations: [{ path: `${CWD}/webview/components/StatusLine.svelte` }],
+    contents: [{ type: 'diff', path: `${CWD}/webview/components/StatusLine.svelte`, oldText: OLD_FILE, newText: NEW_FILE }],
+  });
   return [
     textBlock('user', 'Rewrite the cost formatter and run the typecheck.'),
+    cmdTool,
+    {
+      id: id('appr'),
+      ts: Date.now(),
+      kind: 'approval',
+      request: {
+        requestId: 'req-cmd-anchored',
+        kind: 'command',
+        title: 'Run command',
+        command: 'rm -rf dist && npm run build -- --production',
+        cwd: CWD,
+        toolCallId: cmdTool.toolCallId,
+        alwaysScope: 'Bash(rm:*) + Bash(npm run:*)',
+      },
+    },
+    writeTool,
+    {
+      id: id('appr'),
+      ts: Date.now(),
+      kind: 'approval',
+      request: {
+        requestId: 'req-write-anchored',
+        kind: 'write',
+        title: 'Edit file',
+        path: `${CWD}/webview/components/StatusLine.svelte`,
+        oldText: OLD_FILE,
+        newText: NEW_FILE,
+        toolCallId: writeTool.toolCallId,
+        alwaysScope: 'Edit(all files this session)',
+      },
+    },
     {
       id: id('appr'),
       ts: Date.now(),

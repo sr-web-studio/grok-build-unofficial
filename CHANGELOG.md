@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-08-03
+
+Three approval-gate bugs found in daily use.
+
+### Fixed
+
+- **Bypass now means bypass.** The mode is enforced at `askApproval` itself, the one place an
+  approval card can be born, so no call site can turn "never ask" into a prompt. Every ask that does
+  happen logs its mode and kind to the **Grok Build** output channel
+- **The agent's own permission request obeys the mode** — allowed in Bypass, rejected in Plan — and is
+  answered by matching the option's `kind` and wording instead of blindly taking the first option,
+  which could reject what the user allowed and make the agent ask again
+- **Approve buttons take one click.** An unanswered approval, question, or plan now suspends
+  auto-scroll and is scrolled into view exactly once, so the transcript no longer shifts between
+  `mousedown` and `mouseup` and drops the click. The buttons also latch on the first press, so a
+  second click cannot send a contradictory answer
+
+### Changed
+
+- **An approval card anchored to a visible tool row shows only its title and its buttons.** The
+  command, the file, and the diff are already rendered directly above; repeating them turned one tool
+  call into a wall of text. Cards with no tool row above them still show the full detail
+
 ## [0.2.1] — 2026-08-02
 
 Tool rows got quieter. A few days of real use showed the always-on previews making short answers

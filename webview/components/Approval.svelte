@@ -8,14 +8,29 @@
     block: ApprovalBlock;
     /** Workspace root, so the target reads like an editor tab instead of an absolute path. */
     cwd?: string;
+    /**
+     * The tool row this approval belongs to is already on screen. Then the command, the file and
+     * the diff are all rendered directly above, and repeating them here turns one tool call into
+     * a wall of text — so the card shrinks to its title and its buttons.
+     */
+    compact?: boolean;
     onOpenPath: (path: string, line?: number) => void;
     onDecide: (requestId: string, decision: ApprovalDecision) => void;
   }
 
-  let { block, cwd, onOpenPath, onDecide }: Props = $props();
+  let { block, cwd, compact = false, onOpenPath, onDecide }: Props = $props();
 
   const request = $derived(block.request);
-  const answered = $derived(block.decision !== undefined);
+  /**
+   * Local latch: the host confirms with a `decision` patch, but the buttons must go dead on the
+   * first press. Otherwise an impatient second click on a moving card sends a second, possibly
+   * contradictory answer for a request that is already resolved.
+   */
+  let sent = $state<ApprovalDecision | undefined>(undefined);
+  const answered = $derived(block.decision !== undefined || sent !== undefined);
+  /** What to report: the host's answer once it lands, the pressed button until then. */
+  const verdict = $derived(block.decision ?? sent);
+  const allowed = $derived(verdict === 'once' || verdict === 'always');
   const isNew = $derived(request.kind === 'write' && request.oldText === undefined);
   /* Same shortening as the transcript's tool rows — one file, one way of writing it. */
   const writePath = $derived(request.kind === 'write' ? request.path : undefined);
@@ -30,24 +45,32 @@
 
   function decide(decision: ApprovalDecision) {
     if (answered) return;
+    sent = decision;
     onDecide(request.requestId, decision);
   }
 </script>
 
-<div class="gb-approval-card" class:answered class:rejected={block.decision === 'reject' || block.decision === 'rejectAlways'}>
+<div
+  class="gb-approval-card"
+  class:answered
+  class:compact
+  class:rejected={verdict === 'reject' || verdict === 'rejectAlways'}
+>
   <div class="gb-approval-title">
-    {#if answered && (block.decision === 'once' || block.decision === 'always')}
+    {#if answered && allowed}
       <Icon name="check" size={16} />
     {:else}
       <Icon name="warning" size={16} />
     {/if}
     <span>{request.title}</span>
-    {#if answered}
-      <span class="gb-verdict-line">{decisionLabel[block.decision!]}</span>
+    {#if verdict}
+      <span class="gb-verdict-line">{decisionLabel[verdict]}</span>
     {/if}
   </div>
 
-  {#if request.kind === 'command'}
+  {#if compact}
+    <!-- Nothing repeated: the tool row above already shows the command, the file and the diff. -->
+  {:else if request.kind === 'command'}
     <div class="gb-approval-target">$ {request.command}</div>
     {#if request.cwd}<div class="gb-approval-meta">cwd: {request.cwd}</div>{/if}
   {:else if request.kind === 'write'}
@@ -89,7 +112,7 @@
         </button>
       {/if}
     </div>
-    {#if request.alwaysScope}
+    {#if request.alwaysScope && !compact}
       <div class="gb-approval-meta">“Always” remembers <code>{request.alwaysScope}</code> until the agent restarts.</div>
     {/if}
   {/if}
@@ -108,6 +131,15 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+  }
+
+  /*
+   * Compact: the decision only. It sits directly under its tool row, so it is one line of title
+   * and one row of buttons — the same footprint as the row it answers for.
+   */
+  .gb-approval-card.compact {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
   }
 
   .gb-approval-card.answered {
